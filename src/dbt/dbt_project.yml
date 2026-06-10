@@ -1,0 +1,17 @@
+name: 'dbt_olist'
+version: '1.0.0'
+profile: 'olist'
+
+model-paths: ["models"]
+
+vars:
+  silver_catalog: "{{ env_var('DBT_CATALOG', 'olist_project_dev') }}"
+
+models:
+  dbt_olist:
+    staging:
+      +materialized: view
+      +schema: olist_gold
+    marts:
+      +materialized: table
+      +schema: olist_gold
