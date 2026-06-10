@@ -61,7 +61,7 @@ Flow: `Kaggle → bronze (raw STRING Delta) → silver (typed, clean) → gold (
    the raw source exactly (e.g. zip codes with leading zeros). Explicit casting
    happens only in silver.
 3. **Delta MERGE for silver upserts.** Each silver notebook uses the pattern:
-   `CREATE TABLE IF NOT EXISTS` → transform → `createTemporaryView` → SQL
+   `CREATE TABLE IF NOT EXISTS` → transform → `createOrReplaceTempView` → SQL
    `MERGE INTO`. This is idempotent and safe for incremental reprocessing.
 4. **Bronze uses overwrite, not MERGE.** Bronze tables are fully replaced when a
    new Kaggle dataset version is ingested. Idempotency is handled by the
@@ -142,7 +142,7 @@ All tables live in `{catalog}.olist_silver.*`.
 | --- | --- | --- |
 | `customers_silver` | `customerId` | `customerZipCodePrefix` kept as STRING |
 | `sellers_silver` | `sellerId` | City/state as denormalized strings |
-| `products_silver` | `productId` | INNER JOIN with translation → English category; products without translation are dropped |
+| `products_silver` | `productId` | LEFT JOIN with translation → English category; products without translation use portuguese category |
 | `orders_silver` | `orderId` | All timestamps parsed with explicit format |
 | `orders_items_silver` | `orderId + orderItemId` | `shippingLimitDate` parsed with `to_timestamp()` |
 | `orders_payments_silver` | `orderId + paymentSequential` | |
