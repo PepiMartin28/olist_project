@@ -46,8 +46,9 @@ regions concentrate the worst delivery times?*
   validation, timestamp parsing with explicit format. Loaded via
   `MERGE INTO` for idempotent reprocessing. All tables include a
   `processedTimestamp` audit column.
-- **Gold** — Not yet implemented. Will use dbt (dbt-databricks). Dimensional
-  model (facts + dimensions + aggregates) targeting the business question.
+- **Gold** — In progress. Implemented with dbt (dbt-databricks) under
+  `src/dbt/`. Dimensional model (facts + dimensions + aggregates) targeting the
+  business question. (The dbt project itself is out of scope for this doc.)
 
 Flow: `Kaggle → bronze (raw STRING Delta) → silver (typed, clean) → gold (dbt)`
 
@@ -90,24 +91,25 @@ Flow: `Kaggle → bronze (raw STRING Delta) → silver (typed, clean) → gold (
 .
 ├── .databricks/              # local bundle state (generated)
 ├── .vscode/                  # editor settings
-├── fixtures/                 # sample data fixtures for tests
+├── fixtures/                 # sample data fixtures for tests (currently only .gitkeep)
 ├── src/
 │   ├── bronze/
 │   │   └── olist_bronze.ipynb          # ingestion: Kaggle → Volumes → Delta
-│   └── silver/
-│       ├── silver_setup.ipynb          # creates catalog + silver schema
-│       ├── customers_silver.ipynb
-│       ├── sellers_silver.ipynb
-│       ├── products_silver.ipynb
-│       ├── orders_silver.ipynb
-│       ├── orders_items_silver.ipynb
-│       ├── orders_payments_silver.ipynb
-│       ├── orders_reviews_silver.ipynb
-│       └── geolocation_silver.ipynb
-├── tests/
+│   ├── silver/
+│   │   ├── silver_setup.ipynb          # creates catalog + silver schema
+│   │   ├── customers_silver.ipynb
+│   │   ├── sellers_silver.ipynb
+│   │   ├── products_silver.ipynb
+│   │   ├── orders_silver.ipynb
+│   │   ├── orders_items_silver.ipynb
+│   │   ├── orders_payments_silver.ipynb
+│   │   ├── orders_reviews_silver.ipynb
+│   │   └── geolocation_silver.ipynb
+│   └── dbt/                            # gold layer (dbt-databricks) — see dbt project
+├── tests/                    # conftest.py + sample_taxis_test.py (bundle template, not yet real tests)
 ├── .gitignore
 ├── CLAUDE.md
-├── databricks.yml            # Asset Bundle config (targets, jobs, pipelines)
+├── databricks.yml            # Asset Bundle config (bundle, variables, dev/prod targets)
 ├── pyproject.toml            # Python packaging and dependencies
 └── README.md
 ```
@@ -140,22 +142,28 @@ All tables live in `{catalog}.olist_silver.*`.
 
 | Silver table | MERGE key | Notes |
 | --- | --- | --- |
-| `customers_silver` | `customerId` | `customerZipCodePrefix` kept as STRING |
+| `customers_silver` | `customerId` | `customerUniqueId` also UUID-validated; `customerZipCodePrefix` kept as STRING |
 | `sellers_silver` | `sellerId` | City/state as denormalized strings |
-| `products_silver` | `productId` | LEFT JOIN with translation → English category; products without translation use portuguese category |
+| `products_silver` | `productId` | LEFT JOIN with translation + `coalesce` → English category; products without translation keep portuguese category |
 | `orders_silver` | `orderId` | All timestamps parsed with explicit format |
-| `orders_items_silver` | `orderId + orderItemId` | `shippingLimitDate` parsed with `to_timestamp()` |
-| `orders_payments_silver` | `orderId + paymentSequential` | |
-| `orders_reviews_silver` | `orderId + reviewId` | `reviewCreationTimestamp` + `reviewAnswerTimestamp` |
-| `geolocation_silver` | — | Needs deduplication by zip before use in joins |
+| `order_items_silver` | `orderId + orderItemId` | `shippingLimitDate` parsed with `to_timestamp()` |
+| `order_payments_silver` | `orderId + paymentSequential` | |
+| `order_reviews_silver` | `orderId + reviewId` | `reviewCreationTimestamp` + `reviewAnswerTimestamp` |
+| `geolocation_silver` | `geolocationZipCodePrefix` | Deduplicated in silver: one row per zip (AVG lat/lon, `first` non-null city/state) |
+
+> Note: the `*_order_*` notebook files are named `orders_items_silver.ipynb`,
+> `orders_payments_silver.ipynb`, `orders_reviews_silver.ipynb`, but the Delta
+> tables they create are `order_items_silver`, `order_payments_silver`,
+> `order_reviews_silver` (singular `order`).
 
 **Execution order:** `silver_setup` must run before any other silver notebook.
 
 ---
 
-## 8. Gold layer — planned (not yet implemented)
+## 8. Gold layer — in progress (dbt, under `src/dbt/`)
 
-Will use **dbt-databricks**. Target model:
+Implemented with **dbt-databricks**. Target model (this section documents the
+intended design; the dbt project under `src/dbt/` is the source of truth):
 
 ### Facts
 
@@ -201,11 +209,16 @@ dbt sources point to `olist_silver.*`. dbt tests should cover `not_null`,
   this — the version check in `olist_source_metadata` is the idempotency gate.
 - **Silver setup dependency**: `silver_setup.ipynb` must be the first step in
   any silver workflow. Other silver notebooks assume the schema already exists.
-- **Geolocation duplicates**: `geolocation_silver` has multiple lat/lon rows
-  per zip code. Always aggregate (AVG) before joining on zip.
-- **products_silver INNER JOIN**: products without an English category
-  translation are silently dropped. If totals don't add up, check this first.
+- **Geolocation already deduplicated**: `geolocation_silver` is aggregated in
+  silver to one row per zip prefix (`groupBy` zip → AVG lat/lon, `first`
+  non-null city/state). Downstream joins on zip no longer need to aggregate.
+- **products_silver LEFT JOIN**: a `LEFT JOIN` on the translation table with
+  `coalesce(english, portuguese)` — products without an English translation keep
+  their Portuguese category name (they are NOT dropped).
 - **Volume path resolved**: `/Volumes/{catalog}/{bronze_schema}/raw_data`.
-- **Bundle resources** (jobs, pipelines) are defined in `databricks.yml`.
-  Keep deployment configuration there.
+- **Bundle resources**: `databricks.yml` defines only `bundle`, `variables`
+  (`catalog`, `bronze_schema`, `silver_schema`, `gold_schema`) and the
+  `dev`/`prod` targets, plus `include: resources/*.yml`. The `resources/` folder
+  does not exist yet — no jobs/pipelines/Workflows are defined. Add orchestration
+  there when ready.
 - This file is a living document — update it whenever a decision is resolved.
