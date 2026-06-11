@@ -222,3 +222,11 @@ dbt sources point to `olist_silver.*`. dbt tests should cover `not_null`,
   does not exist yet — no jobs/pipelines/Workflows are defined. Add orchestration
   there when ready.
 - This file is a living document — update it whenever a decision is resolved.
+
+---
+
+## Code review policy
+Whenever the user asks to review, audit or validate code (any phrasing, any
+language — e.g. "revisa este código", "review this", "audita la capa silver",
+"checkea antes del PR"), ALWAYS delegate to the `de-code-reviewer` subagent.
+Do not use the generic/built-in code review for these requests.
