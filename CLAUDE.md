@@ -101,9 +101,9 @@ Flow: `Kaggle → bronze (raw STRING Delta) → silver (typed, clean) → gold (
 │   │   ├── sellers_silver.ipynb
 │   │   ├── products_silver.ipynb
 │   │   ├── orders_silver.ipynb
-│   │   ├── orders_items_silver.ipynb
-│   │   ├── orders_payments_silver.ipynb
-│   │   ├── orders_reviews_silver.ipynb
+│   │   ├── order_items_silver.ipynb
+│   │   ├── order_payments_silver.ipynb
+│   │   ├── order_reviews_silver.ipynb
 │   │   └── geolocation_silver.ipynb
 │   └── dbt/                            # gold layer (dbt-databricks) — see dbt project
 ├── tests/                    # conftest.py + sample_taxis_test.py (bundle template, not yet real tests)
@@ -151,8 +151,8 @@ All tables live in `{catalog}.olist_silver.*`.
 | `order_reviews_silver` | `orderId + reviewId` | `reviewCreationTimestamp` + `reviewAnswerTimestamp` |
 | `geolocation_silver` | `geolocationZipCodePrefix` | Deduplicated in silver: one row per zip (AVG lat/lon, `first` non-null city/state) |
 
-> Note: the `*_order_*` notebook files are named `orders_items_silver.ipynb`,
-> `orders_payments_silver.ipynb`, `orders_reviews_silver.ipynb`, but the Delta
+> Note: the `*_order_*` notebook files are named `order_items_silver.ipynb`,
+> `order_payments_silver.ipynb`, `order_reviews_silver.ipynb`, but the Delta
 > tables they create are `order_items_silver`, `order_payments_silver`,
 > `order_reviews_silver` (singular `order`).
 
