@@ -1,0 +1,68 @@
+version: 2
+
+models:
+  - name: stg_customers
+    description: "Staging model for customers data."
+    columns:
+      - name: customerId
+        tests: [not_null, unique]
+      - name: customerZipCodePrefix
+        tests: [not_null]
+
+  - name: stg_geolocation
+    description: "Staging model for geolocation data."
+    columns:
+      - name: geolocationZipCodePrefix
+        tests: [not_null]
+
+  - name: stg_order_items
+    description: "Staging model for order items data."
+    columns:
+      - name: orderId
+        tests: [not_null, unique]
+      - name: orderItemId
+        tests: [not_null]
+      - name: productId
+        tests: [not_null]
+
+  - name: stg_order_payments
+    description: "Staging model for order payments data."
+    columns:
+      - name: orderId
+        tests: [not_null, unique]
+      - name: paymentSequential
+        tests: [not_null]
+
+  - name: stg_order_reviews
+    description: "Staging model for order reviews data."
+    columns:
+      - name: reviewId
+        tests: [not_null, unique]
+      - name: orderId
+        tests: [not_null]
+
+  - name: stg_orders
+    description: "Staging model for orders data."
+    columns:
+      - name: orderId
+        tests: [not_null, unique]
+      - name: customerId
+        tests: [not_null]
+      - name: orderStatus
+        tests: [not_null]
+
+  - name: stg_products
+    description: "Staging model for products data."
+    columns:
+      - name: productId
+        tests: [not_null, unique]
+      - name: productCategoryName
+        tests: [not_null]
+
+  - name: stg_sellers
+    description: "Staging model for sellers data."
+    columns:
+      - name: sellerId
+        tests: [not_null, unique]
+      - name: sellerZipCodePrefix
+        tests: [not_null]

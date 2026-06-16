@@ -1,0 +1,15 @@
+version: 2
+
+sources:
+  - name: olist_silver
+    catalog: "{{ var('silver_catalog') }}"
+    schema: olist_silver
+    tables:
+      - name: customers_silver
+      - name: geolocation_silver
+      - name: orders_silver
+      - name: order_items_silver
+      - name: order_reviews_silver
+      - name: order_payments_silver
+      - name: products_silver
+      - name: sellers_silver
