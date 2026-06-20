@@ -1,0 +1,57 @@
+version: 2
+
+models:
+  - name: fact_orders
+    columns:
+      - name: id
+        tests:
+          - not_null
+          - unique
+      - name: fulfillmentStatus
+        tests:
+          - accepted_values:
+              values:
+                - delivered
+                - shipped
+                - canceled
+                - invoiced
+                - processing
+                - unavailable
+      - name: avgReviewScore
+        tests:
+          - dbt_utils.accepted_range:
+              min_value: 1
+              max_value: 5
+      - name: purchaseDate
+        tests:
+          - not_null
+
+  - name: fact_order_items
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          combination_of_columns:
+            - orderId
+            - orderItemId
+    columns:
+      - name: orderId
+        tests:
+          - not_null
+      - name: orderItemId
+        tests:
+          - not_null
+      - name: productId
+        tests:
+          - not_null
+      - name: sellerId
+        tests:
+          - not_null
+      - name: price
+        tests:
+          - dbt_utils.accepted_range:
+              min_value: 0
+          - not_null
+      - name: freightValue
+        tests:
+          - dbt_utils.accepted_range:
+              min_value: 0
+          - not_null
