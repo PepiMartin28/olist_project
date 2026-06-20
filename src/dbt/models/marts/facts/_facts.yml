@@ -36,15 +36,24 @@ models:
       - name: orderId
         tests:
           - not_null
+          - relationships:
+            to: ref('fact_orders')
+            field: id
       - name: orderItemId
         tests:
           - not_null
       - name: productId
         tests:
           - not_null
+          - relationships:
+              to: ref('dim_products')
+              field: id
       - name: sellerId
         tests:
           - not_null
+          - relationships:
+              to: ref('dim_sellers')
+              field: id
       - name: price
         tests:
           - dbt_utils.accepted_range:
