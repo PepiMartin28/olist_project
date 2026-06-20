@@ -19,7 +19,7 @@ models:
     description: "Staging model for order items data."
     columns:
       - name: orderId
-        tests: [not_null, unique]
+        tests: [not_null]
       - name: orderItemId
         tests: [not_null]
       - name: productId
@@ -29,7 +29,7 @@ models:
     description: "Staging model for order payments data."
     columns:
       - name: orderId
-        tests: [not_null, unique]
+        tests: [not_null]
       - name: paymentSequential
         tests: [not_null]
 
