@@ -46,9 +46,10 @@ regions concentrate the worst delivery times?*
   validation, timestamp parsing with explicit format. Loaded via
   `MERGE INTO` for idempotent reprocessing. All tables include a
   `processedTimestamp` audit column.
-- **Gold** — In progress. Implemented with dbt (dbt-databricks) under
-  `src/dbt/`. Dimensional model (facts + dimensions + aggregates) targeting the
-  business question. (The dbt project itself is out of scope for this doc.)
+- **Gold** — Implemented with dbt (dbt-databricks) under `src/dbt/`. Dimensional
+  model written to schema `olist_gold`: a **staging** layer (views over silver) +
+  **dimensions** and **facts** (tables). Aggregates are still pending. See §8 for
+  the full model inventory.
 
 Flow: `Kaggle → bronze (raw STRING Delta) → silver (typed, clean) → gold (dbt)`
 
@@ -105,7 +106,19 @@ Flow: `Kaggle → bronze (raw STRING Delta) → silver (typed, clean) → gold (
 │   │   ├── order_payments_silver.ipynb
 │   │   ├── order_reviews_silver.ipynb
 │   │   └── geolocation_silver.ipynb
-│   └── dbt/                            # gold layer (dbt-databricks) — see dbt project
+│   └── dbt/                            # gold layer (dbt-databricks)
+│       ├── dbt_project.yml             # project 'dbt_olist', profile 'olist'
+│       ├── profiles.yml                # databricks targets (env_var: DBT_HTTP_PATH, DBT_TOKEN)
+│       ├── packages.yml                # dbt_utils
+│       └── models/
+│           ├── staging/                # views in olist_gold (1:1 over silver, renamed cols)
+│           │   ├── _sources.yml        # sources → olist_silver.*
+│           │   ├── _staging.yml        # tests
+│           │   └── stg_*.sql           # 8 staging models
+│           └── marts/                  # tables in olist_gold
+│               ├── dimensions/         # dim_regions, dim_geolocation, dim_categories,
+│               │                       #   dim_products, dim_customers, dim_sellers
+│               └── facts/              # fact_orders, fact_order_items
 ├── tests/                    # conftest.py + sample_taxis_test.py (bundle template, not yet real tests)
 ├── .gitignore
 ├── CLAUDE.md
@@ -160,33 +173,87 @@ All tables live in `{catalog}.olist_silver.*`.
 
 ---
 
-## 8. Gold layer — in progress (dbt, under `src/dbt/`)
+## 8. Gold layer — dbt (`src/dbt/`)
 
-Implemented with **dbt-databricks**. Target model (this section documents the
-intended design; the dbt project under `src/dbt/` is the source of truth):
+Implemented with **dbt-databricks**. dbt project `dbt_olist`, profile `olist`.
+The dbt project under `src/dbt/` is the source of truth. **Staging + dimensions +
+facts are implemented; aggregates are not yet built.**
 
-### Facts
+### Project config
 
-- `fct_orders` — one row per order; derived metrics: `delivery_days`,
-  `estimated_days`, `delay_days`, `is_late`, `review_score`
-- `fct_order_items` — one row per item; price, freight, seller
+- **Two layers, both written to schema `olist_gold`:**
+  - `staging/` → materialized as **views** (1:1 over silver, column renames only).
+  - `marts/` (dimensions + facts) → materialized as **tables**.
+- **Catalog** comes from `var('silver_catalog')`, defaulted from
+  `env_var('DBT_CATALOG', 'olist_project_dev')` in `dbt_project.yml`.
+- **Sources** (`_sources.yml`) point to `olist_silver.*` (catalog from the same
+  var). Connection (`profiles.yml`) reads `DBT_HTTP_PATH` and `DBT_TOKEN` from env.
+- **Packages**: `dbt_utils` (`packages.yml`).
 
-### Dimensions
+### Staging (views, 1:1 over silver)
 
-- `dim_customers` — customer location (city, state, lat/lon via geolocation)
-- `dim_sellers` — seller location
-- `dim_products` — product with English category
-- `dim_cities` — surrogate key via `dbt_utils.generate_surrogate_key(['city_name', 'state'])`
+`stg_customers`, `stg_sellers`, `stg_products`, `stg_orders`, `stg_order_items`,
+`stg_order_payments`, `stg_order_reviews`, `stg_geolocation`.
 
-### Aggregates
+- `stg_geolocation` is special: it **UNION ALLs** zip/city/state from
+  `geolocation_silver` (with lat/lon) plus `sellers_silver` and `customers_silver`
+  (lat/lon NULL), to get a complete zip→region coverage. Not deduplicated here —
+  aggregation happens in the dimensions.
 
-- `agg_delivery_by_seller` — avg delivery days, avg review score, late rate
-- `agg_delivery_by_state` — same metrics grouped by state
-- `agg_delivery_vs_satisfaction` — delivery days bucketed vs avg review score
+### Dimensions (`marts/dimensions/`)
 
-dbt sources point to `olist_silver.*`. dbt tests should cover `not_null`,
-`unique`, `relationships`, and `accepted_values` (e.g. `review_score` 1–5,
-`order_status` enum).
+- `dim_regions` — surrogate key `id` via
+  `dbt_utils.generate_surrogate_key(['geolocationCityName','geolocationState'])`,
+  one row per distinct (`city`, `stateName`). This is the city/region dimension
+  (replaces the planned `dim_cities`).
+- `dim_geolocation` — one row per `zipCodePrefix`: AVG `latitude`/`longitude`, plus
+  `regionId` = the **dominant** region for that zip (most frequent city/state match
+  to `dim_regions`, tie-broken by `regionId`, via `qualify row_number()`).
+- `dim_categories` — surrogate key `id` from `productCategoryName`, column `name`.
+- `dim_products` — `id`, `categoryId` (FK → `dim_categories`, joined on name with
+  `<=>` null-safe equality), plus physical attributes (`nameLength`,
+  `descriptionLength`, `photosQty`, `weightG`, `lengthCm`, `heightCm`, `widthCm`).
+- `dim_customers` — `id`, `uniqueId`, `zipCodePrefix` (FK → `dim_geolocation`).
+- `dim_sellers` — `id`, `zipCodePrefix` (FK → `dim_geolocation`).
+
+### Facts (`marts/facts/`)
+
+- `fact_orders` — one row per order. Columns: `id`, `customerId`,
+  `fulfillmentStatus` (= `orderStatus`), `avgReviewScore`, `purchaseDate`, and
+  time metrics **in hours**: `processingHours`, `deliveryHours`, `courierHours`,
+  `totalTimeHours`, `estimatedHours`, `deliveryDelayHours`, plus the `isLate` flag.
+  - **Time metrics are stored in HOURS** (`timestampdiff(HOUR, ...)`), the atomic
+    grain. Days should be derived downstream (`hours / 24.0`), never truncated
+    with `timestampdiff(DAY, ...)`. This preserves resolution for ranking the
+    worst delivery times.
+  - `isLate` is ternary: `null` when the order was never delivered, `true`/`false`
+    only for delivered orders. Consumers must filter `isLate is not null` (or
+    delivered orders) before computing late rates.
+  - `avgReviewScore` is the **average** review score per order (a continuous
+    decimal), since an order can have several reviews. It is NOT the discrete
+    1–5 enum; `accepted_range(min:1, max:5)` applies, not `accepted_values`.
+- `fact_order_items` — one row per item (grain `orderId + orderItemId`): `productId`,
+  `sellerId`, `price`, `freightValue`.
+
+### Tests (in `_*.yml` alongside models)
+
+- Staging: `not_null` / `unique` on keys.
+- Dimensions: `not_null` + `unique` on surrogate keys; `relationships` FKs
+  (`dim_products.categoryId` → `dim_categories`, `dim_customers`/`dim_sellers`
+  `.zipCodePrefix` → `dim_geolocation`, `dim_geolocation.regionId` → `dim_regions`);
+  `dbt_utils.unique_combination_of_columns` on `dim_regions(city, state)`.
+- Facts: `fact_orders` — `fulfillmentStatus` `accepted_values` (order-status enum),
+  `avgReviewScore` `accepted_range(1..5)`; `fact_order_items` —
+  `unique_combination_of_columns(orderId, orderItemId)`, `relationships` to
+  `fact_orders`/`dim_products`/`dim_sellers`, `accepted_range(min:0)` on
+  `price`/`freightValue`.
+
+### Not yet built
+
+- **Aggregates** (`agg_delivery_by_seller`, `agg_delivery_by_state`,
+  `agg_delivery_vs_satisfaction`) — planned, not implemented.
+- **Orchestration** — no `resources/*.yml` jobs/Workflows wiring bronze → silver →
+  dbt yet (see §10).
 
 ---
 
@@ -224,9 +291,3 @@ dbt sources point to `olist_silver.*`. dbt tests should cover `not_null`,
 - This file is a living document — update it whenever a decision is resolved.
 
 ---
-
-## Code review policy
-Whenever the user asks to review, audit or validate code (any phrasing, any
-language — e.g. "revisa este código", "review this", "audita la capa silver",
-"checkea antes del PR"), ALWAYS delegate to the `de-code-reviewer` subagent.
-Do not use the generic/built-in code review for these requests.
