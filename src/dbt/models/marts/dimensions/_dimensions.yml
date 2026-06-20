@@ -1,0 +1,86 @@
+version: 2
+
+models:
+  - name: dim_regions
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          combination_of_columns:
+            - city
+            - state
+    columns:
+      - name: id
+        tests:
+          - unique
+      - name: city
+        tests:
+          - not_null
+      - name: stateName
+        tests:
+          - not_null
+  
+  - name: dim_categories
+    columns:
+      - name: id
+        tests:
+          - not_null
+          - unique
+      - name: name
+        tests:
+          - not_null
+
+  - name: dim_products
+    columns:
+      - name: id
+        tests:
+          - not_null
+          - unique
+      - name: name
+        tests:
+          - not_null
+      - name: categoryId
+        tests:
+          - not_null
+          - relationships:
+              to: ref('dim_categories')
+              field: id
+
+  - name: dim_customers
+    columns:
+      - name: id
+        tests:
+          - not_null
+      - name: uniqueId
+        tests:
+          - not_null
+          - unique
+      - name: zipCodePrefix
+        tests:
+          - not_null
+          - relationships:
+              to: ref('dim_geolocation')
+              field: zipCodePrefix
+  
+  - name: dim_sellers
+    columns:
+      - name: id
+        tests:
+          - not_null
+          - unique
+      - name: zipCodePrefix
+        tests:
+          - not_null
+          - relationships:
+              to: ref('dim_geolocation')
+              field: zipCodePrefix
+  
+  - name: dim_geolocation
+    columns:
+      - name: zipCodePrefix
+        tests:
+          - not_null
+          - unique
+      - name: regionId
+        tests:
+          - relationships:
+              to: ref('dim_regions')
+              field: id
