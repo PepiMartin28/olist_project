@@ -1,36 +1,31 @@
-with all_zipCodes as (
+with locations as (
     select
         geolocationZipCodePrefix as zipCodePrefix,
-        geolocationCityName as city,
-        geolocationState as stateName
-    from {{ source('olist_silver', 'geolocation_silver') }} 
-    
-    union
-    
+        geolocationCityName      as city,
+        geolocationState         as stateName,
+        geolocationLatitude      as latitude,
+        geolocationLongitude     as longitude
+    from {{ source('olist_silver', 'geolocation_silver') }}
+
+    union all
+
     select
         sellerZipCodePrefix as zipCodePrefix,
-        sellerCity as city,
-        sellerState as stateName
+        sellerCity          as city,
+        sellerState         as stateName,
+        cast(null as double) as latitude,
+        cast(null as double) as longitude
     from {{ source('olist_silver', 'sellers_silver') }}
-    
-    union
+
+    union all
 
     select
         customerZipCodePrefix as zipCodePrefix,
-        customerCity as city,
-        customerState as stateName
+        customerCity          as city,
+        customerState         as stateName,
+        cast(null as double) as latitude,
+        cast(null as double) as longitude
     from {{ source('olist_silver', 'customers_silver') }}
 )
 
-select distinct
-    zip.zipCodePrefix as geolocationZipCodePrefix,
-    geo.geolocationLatitude as geolocationLatitude,
-    geo.geolocationLongitude as geolocationLongitude,
-    zip.city as geolocationCityName,
-    zip.stateName as geolocationState
-from all_zipCodes zip
-left join {{ source('olist_silver', 'geolocation_silver') }} geo
-    on 
-        zip.zipCodePrefix = geo.geolocationZipCodePrefix 
-        and zip.city = geo.geolocationCityName 
-        and zip.stateName = geo.geolocationState
+select * from locations

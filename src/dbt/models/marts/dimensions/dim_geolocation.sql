@@ -1,26 +1,28 @@
-with geo_avg as (
+with locations as (
+    select * from {{ ref('stg_geolocation') }}
+),
+
+geo_avg as (
     select
-        geolocationZipCodePrefix as zipCodePrefix,
-        avg(geolocationLatitude) as latitude,
-        avg(geolocationLongitude) as longitude
-    from {{ ref('stg_geolocation') }}
-    group by geolocationZipCodePrefix
+        zipCodePrefix,
+        avg(latitude)  as latitude,
+        avg(longitude) as longitude
+    from locations
+    group by zipCodePrefix
 ),
 
 dominant_region as (
     select
-        geo.geolocationZipCodePrefix as zipCodePrefix,
+        loc.zipCodePrefix,
         region.id as regionId
-    from {{ ref('stg_geolocation') }} as geo
-    left join {{ ref('dim_regions') }} as region
-        on geo.geolocationCityName = region.city
-        and geo.geolocationState  = region.stateName
-    group by
-        geo.geolocationZipCodePrefix,
-        region.id
+    from locations as loc
+    join {{ ref('dim_regions') }} as region
+        on loc.city = region.city
+        and loc.stateName = region.stateName
+    group by loc.zipCodePrefix, region.id
     qualify row_number() over (
-        partition by geo.geolocationZipCodePrefix
-        order by count(*) desc, region.id     
+        partition by loc.zipCodePrefix
+        order by count(*) desc, region.id
     ) = 1
 )
 

@@ -9,6 +9,5 @@ select
     product.productHeightCm as heightCm,
     product.productWidthCm as widthCm
 from {{ ref('stg_products') }} product
-join {{ ref('dim_categories') }} category
-    on product.productCategoryName = category.name
-where productCategoryName is not null
+left join {{ ref('dim_categories') }} category
+    on product.productCategoryName <=> category.name

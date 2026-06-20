@@ -11,6 +11,8 @@ models:
         tests:
           - accepted_values:
               values:
+                - accepted
+                - approved
                 - delivered
                 - shipped
                 - canceled

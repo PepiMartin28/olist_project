@@ -34,9 +34,6 @@ models:
         tests:
           - not_null
           - unique
-      - name: name
-        tests:
-          - not_null
       - name: categoryId
         tests:
           - not_null
@@ -48,6 +45,7 @@ models:
     columns:
       - name: id
         tests:
+          - unique
           - not_null
       - name: uniqueId
         tests:

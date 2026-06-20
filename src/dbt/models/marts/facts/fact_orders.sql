@@ -15,7 +15,7 @@ select
     timestampdiff(HOUR, orders.orderPurchaseTimestamp, orders.orderApprovedAt) as processingHours,
     timestampdiff(HOUR, orders.orderApprovedAt, orders.orderDeliveredCarrierDate) as deliveryHours,
     timestampdiff(HOUR, orders.orderDeliveredCarrierDate, orders.orderDeliveredCustomerDate) as courierHours,
-    timestampdiff(HOUR, orders.orderPurchaseTimestamp, orders.orderDeliveredCustomerDate) as totalTime,
+    timestampdiff(HOUR, orders.orderPurchaseTimestamp, orders.orderDeliveredCustomerDate) as totalTimeHours,
     timestampdiff(HOUR, orders.orderPurchaseTimestamp, orders.orderEstimatedDeliveryDate) as estimatedHours,
     timestampdiff(HOUR, orders.orderEstimatedDeliveryDate, orders.orderDeliveredCustomerDate) as deliveryDelayHours,
     case
