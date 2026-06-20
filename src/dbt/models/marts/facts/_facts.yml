@@ -37,8 +37,8 @@ models:
         tests:
           - not_null
           - relationships:
-            to: ref('fact_orders')
-            field: id
+              to: ref('fact_orders')
+              field: id
       - name: orderItemId
         tests:
           - not_null
