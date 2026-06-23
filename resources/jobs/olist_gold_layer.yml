@@ -1,0 +1,28 @@
+resources:
+  jobs:
+    olist_gold_layer:
+      name: Olist Gold Layer
+
+      email_notifications:
+        on_failure:
+          - martinpepi_99@hotmail.com
+
+      environments:
+        - environment_key: dbt
+          spec:
+            environment_version: "5"
+            dependencies:
+              - dbt-databricks>=1.0.0,<2.0.0
+
+      tasks:
+        - task_key: dbt_gold
+          environment_key: dbt
+          dbt_task:
+            project_directory: ../src/dbt
+            catalog: ${var.catalog}
+            schema: ${var.gold_schema}
+            warehouse_id: ${var.warehouse_id}
+            commands:
+              - "dbt deps"
+              - "dbt run --vars '{silver_catalog: ${var.catalog}}'"
+              - "dbt test --vars '{silver_catalog: ${var.catalog}}'"

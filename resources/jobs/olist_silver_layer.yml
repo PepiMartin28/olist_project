@@ -1,0 +1,113 @@
+resources:
+  jobs:
+    olist_silver_layer:
+      name: Olist Silver Layer
+      
+      email_notifications:
+        on_failure:
+          - martinpepi_99@hotmail.com
+
+      tasks:
+        - task_key: silver_setup
+          notebook_task:
+            notebook_path: ../src/silver/silver_setup.ipynb
+            base_parameters:
+              catalog: ${var.catalog}
+              silver_schema: ${var.silver_schema}
+        
+        - task_key: customers_silver
+          depends_on:
+            - task_key: silver_setup
+          notebook_task:
+            notebook_path: ../src/silver/customers_silver.ipynb
+            base_parameters:
+              catalog: ${var.catalog}
+              bronze_schema: ${var.bronze_schema}
+              raw_olist_customers_table: ${var.raw_olist_customers_table}
+              silver_schema: ${var.silver_schema}
+              customers_table: ${var.customers_table}
+
+        - task_key: geolocation_silver
+          depends_on:
+            - task_key: silver_setup
+          notebook_task:
+            notebook_path: ../src/silver/geolocation_silver.ipynb
+            base_parameters:
+              catalog: ${var.catalog}
+              bronze_schema: ${var.bronze_schema}
+              raw_olist_geolocation_table: ${var.raw_olist_geolocation_table}
+              silver_schema: ${var.silver_schema}
+              geolocation_table: ${var.geolocation_table}
+        
+        - task_key: order_items_silver
+          depends_on:
+            - task_key: silver_setup
+          notebook_task:
+            notebook_path: ../src/silver/order_items_silver.ipynb
+            base_parameters:
+              catalog: ${var.catalog}
+              bronze_schema: ${var.bronze_schema}
+              raw_olist_order_items_table: ${var.raw_olist_order_items_table}
+              silver_schema: ${var.silver_schema}
+              order_items_table: ${var.order_items_table}
+        
+        - task_key: order_payments_silver
+          depends_on:
+            - task_key: silver_setup
+          notebook_task:
+            notebook_path: ../src/silver/order_payments_silver.ipynb
+            base_parameters:
+              catalog: ${var.catalog}
+              bronze_schema: ${var.bronze_schema}
+              raw_olist_order_payments_table: ${var.raw_olist_order_payments_table}
+              silver_schema: ${var.silver_schema}
+              order_payments_table: ${var.order_payments_table}
+        
+        - task_key: order_reviews_silver
+          depends_on:
+            - task_key: silver_setup
+          notebook_task:
+            notebook_path: ../src/silver/order_reviews_silver.ipynb
+            base_parameters:
+              catalog: ${var.catalog}
+              bronze_schema: ${var.bronze_schema}
+              raw_olist_order_reviews_table: ${var.raw_olist_order_reviews_table}
+              silver_schema: ${var.silver_schema}
+              order_reviews_table: ${var.order_reviews_table}
+        
+        - task_key: orders_silver
+          depends_on:
+            - task_key: silver_setup
+          notebook_task:
+            notebook_path: ../src/silver/orders_silver.ipynb
+            base_parameters:
+              catalog: ${var.catalog}
+              bronze_schema: ${var.bronze_schema}
+              raw_olist_orders_table: ${var.raw_olist_orders_table}
+              silver_schema: ${var.silver_schema}
+              orders_table: ${var.orders_table}
+        
+        - task_key: products_silver
+          depends_on:
+            - task_key: silver_setup
+          notebook_task:
+            notebook_path: ../src/silver/products_silver.ipynb
+            base_parameters:
+              catalog: ${var.catalog}
+              bronze_schema: ${var.bronze_schema}
+              raw_olist_products_table: ${var.raw_olist_products_table}
+              raw_category_translation_table: ${var.raw_category_translation_table}
+              silver_schema: ${var.silver_schema}
+              products_table: ${var.products_table}
+        
+        - task_key: sellers_silver
+          depends_on:
+            - task_key: silver_setup
+          notebook_task:
+            notebook_path: ../src/silver/sellers_silver.ipynb
+            base_parameters:
+              catalog: ${var.catalog}
+              bronze_schema: ${var.bronze_schema}
+              raw_olist_sellers_table: ${var.raw_olist_sellers_table}
+              silver_schema: ${var.silver_schema}
+              sellers_table: ${var.sellers_table}

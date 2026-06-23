@@ -1,0 +1,14 @@
+targets:
+  dev:
+    mode: development
+    default: true
+    
+    workspace:
+      host: https://dbc-73e4c67b-b212.cloud.databricks.com
+    
+    permissions:
+      - group_name: olist_group_dev
+        level: CAN_MANAGE
+    
+    run_as:
+      service_principal_name: 67f257ce-4001-4f70-8e92-69dbb151001e

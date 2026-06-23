@@ -1,0 +1,25 @@
+resources:
+  jobs:
+    olist_bronze_layer:
+      name: Olist Bronze Layer
+
+      email_notifications:
+        on_failure:
+          - martinpepi_99@hotmail.com
+
+      environments:
+        - environment_key: libraries
+          spec:
+            environment_version: "5"
+            dependencies:
+              - kagglehub
+
+      tasks:
+        - task_key: raw_ingestion
+          notebook_task:
+            notebook_path: ../src/bronze/olist_bronze.ipynb
+            base_parameters:
+              catalog: ${var.catalog}
+              bronze_schema: ${var.bronze_schema}
+              metadata_table: ${var.metadata_table}
+          environment_key: libraries

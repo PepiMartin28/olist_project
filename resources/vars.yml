@@ -1,0 +1,49 @@
+# Variable declarations. These variables are assigned in the dev/prod targets below.
+variables:
+  catalog:
+    default: "olist_project_dev"
+  
+  bronze_schema:
+    default: "olist_bronze"
+  silver_schema:
+    default: "olist_silver"
+  gold_schema:
+    default: "olist_gold"
+  warehouse_id:
+    default: "867f5dd25221550d"
+
+  metadata_table:
+    default: olist_source_metadata
+  
+  raw_olist_customers_table:
+    default: olist_customers
+  raw_olist_geolocation_table:
+    default: olist_geolocation
+  raw_olist_order_items_table:
+    default: olist_order_items
+  raw_olist_order_payments_table:
+    default: olist_order_payments
+  raw_olist_order_reviews_table:
+    default: olist_order_reviews
+  raw_olist_orders_table:
+    default: olist_orders
+  raw_olist_sellers_table:
+    default: olist_sellers
+  raw_category_translation_table:
+    default: product_category_name_translation
+  
+  customers_table:
+    default: customers_silver
+  geolocation_table:
+    default: geolocation_silver
+  order_items_table:
+    default: order_items_silver
+  order_payments_table:
+    default: order_payments_silver
+  order_reviews_table:
+    default: order_reviews_silver
+  orders_table:
+    default: orders_silver
+  sellers_table:
+    default: sellers_silver
+  

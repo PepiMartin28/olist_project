@@ -1,0 +1,18 @@
+targets:  
+  prod:
+    mode: production
+    
+    workspace:
+      host: https://dbc-73e4c67b-b212.cloud.databricks.com
+      root_path: /Workspace/Users/${user.name}/.bundle/${bundle.name}/${bundle.target}
+    
+    variables:
+      catalog: olist_project_prod
+    
+    permissions:
+      - group_name: olist_group_prod
+        level: CAN_MANAGE
+    
+    run_as:
+      service_principal_name: ea02af8e-12a1-4b0e-8fbe-2831cacfdd83
+
