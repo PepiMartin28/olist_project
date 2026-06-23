@@ -27,6 +27,8 @@ variables:
     default: olist_order_reviews
   raw_olist_orders_table:
     default: olist_orders
+  raw_olist_products_table:
+    default: olist_products
   raw_olist_sellers_table:
     default: olist_sellers
   raw_category_translation_table:
@@ -44,6 +46,8 @@ variables:
     default: order_reviews_silver
   orders_table:
     default: orders_silver
+  products_table:
+    default: products_silver
   sellers_table:
     default: sellers_silver
   
