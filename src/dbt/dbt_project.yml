@@ -11,7 +11,7 @@ models:
   dbt_olist:
     staging:
       +materialized: view
-      +schema: olist_gold
     marts:
       +materialized: table
-      +schema: olist_gold
+      aggregates:
+        +materialized: view
