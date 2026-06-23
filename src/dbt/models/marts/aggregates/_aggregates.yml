@@ -1,0 +1,77 @@
+version: 2
+
+models:
+  - name: agg_delivery_vs_satisfaction
+    columns:
+      - name: avgReviewScore
+        tests:
+          - dbt_utils.accepted_range:
+              min_value: -1
+              max_value: 5
+          - unique
+          - not_null
+      - name: totalOrders
+        tests:
+          - not_null
+          - dbt_utils.accepted_range:
+              min_value: 0
+      - name: lateOrders
+        tests:
+          - not_null
+          - dbt_utils.accepted_range:
+              min_value: 0
+      - name: lateRatePct
+        tests:
+          - not_null
+          - dbt_utils.accepted_range:
+              min_value: 0
+              max_value: 100
+
+  - name: agg_delivery_by_customer_region
+    columns:
+      - name: stateName
+        tests:
+          - not_null
+          - unique
+      - name: totalOrders
+        tests:
+          - not_null
+          - dbt_utils.accepted_range:
+              min_value: 0
+      - name: lateOrders
+        tests:
+          - not_null
+          - dbt_utils.accepted_range:
+              min_value: 0
+      - name: lateRatePct
+        tests:
+          - not_null
+          - dbt_utils.accepted_range:
+              min_value: 0
+              max_value: 100
+  
+  - name: agg_delivery_by_seller
+    columns:
+      - name: sellerId
+        tests:
+          - not_null
+          - unique
+          - relationships:
+              to: ref('dim_sellers')
+              field: id
+      - name: totalOrders
+        tests:
+          - not_null
+          - dbt_utils.accepted_range:
+              min_value: 0
+      - name: lateOrders
+        tests:
+          - not_null
+          - dbt_utils.accepted_range:
+              min_value: 0
+      - name: lateRatePct
+        tests:
+          - not_null
+          - dbt_utils.accepted_range:
+              min_value: 0
+              max_value: 100
