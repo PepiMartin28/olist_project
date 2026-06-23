@@ -10,7 +10,7 @@ resources:
       tasks:
         - task_key: silver_setup
           notebook_task:
-            notebook_path: ../src/silver/silver_setup.ipynb
+            notebook_path: ../../src/silver/silver_setup.ipynb
             base_parameters:
               catalog: ${var.catalog}
               silver_schema: ${var.silver_schema}
@@ -19,7 +19,7 @@ resources:
           depends_on:
             - task_key: silver_setup
           notebook_task:
-            notebook_path: ../src/silver/customers_silver.ipynb
+            notebook_path: ../../src/silver/customers_silver.ipynb
             base_parameters:
               catalog: ${var.catalog}
               bronze_schema: ${var.bronze_schema}
@@ -31,7 +31,7 @@ resources:
           depends_on:
             - task_key: silver_setup
           notebook_task:
-            notebook_path: ../src/silver/geolocation_silver.ipynb
+            notebook_path: ../../src/silver/geolocation_silver.ipynb
             base_parameters:
               catalog: ${var.catalog}
               bronze_schema: ${var.bronze_schema}
@@ -43,7 +43,7 @@ resources:
           depends_on:
             - task_key: silver_setup
           notebook_task:
-            notebook_path: ../src/silver/order_items_silver.ipynb
+            notebook_path: ../../src/silver/order_items_silver.ipynb
             base_parameters:
               catalog: ${var.catalog}
               bronze_schema: ${var.bronze_schema}
@@ -55,7 +55,7 @@ resources:
           depends_on:
             - task_key: silver_setup
           notebook_task:
-            notebook_path: ../src/silver/order_payments_silver.ipynb
+            notebook_path: ../../src/silver/order_payments_silver.ipynb
             base_parameters:
               catalog: ${var.catalog}
               bronze_schema: ${var.bronze_schema}
@@ -67,7 +67,7 @@ resources:
           depends_on:
             - task_key: silver_setup
           notebook_task:
-            notebook_path: ../src/silver/order_reviews_silver.ipynb
+            notebook_path: ../../src/silver/order_reviews_silver.ipynb
             base_parameters:
               catalog: ${var.catalog}
               bronze_schema: ${var.bronze_schema}
@@ -79,7 +79,7 @@ resources:
           depends_on:
             - task_key: silver_setup
           notebook_task:
-            notebook_path: ../src/silver/orders_silver.ipynb
+            notebook_path: ../../src/silver/orders_silver.ipynb
             base_parameters:
               catalog: ${var.catalog}
               bronze_schema: ${var.bronze_schema}
@@ -91,7 +91,7 @@ resources:
           depends_on:
             - task_key: silver_setup
           notebook_task:
-            notebook_path: ../src/silver/products_silver.ipynb
+            notebook_path: ../../src/silver/products_silver.ipynb
             base_parameters:
               catalog: ${var.catalog}
               bronze_schema: ${var.bronze_schema}
@@ -104,7 +104,7 @@ resources:
           depends_on:
             - task_key: silver_setup
           notebook_task:
-            notebook_path: ../src/silver/sellers_silver.ipynb
+            notebook_path: ../../src/silver/sellers_silver.ipynb
             base_parameters:
               catalog: ${var.catalog}
               bronze_schema: ${var.bronze_schema}

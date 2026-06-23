@@ -17,7 +17,7 @@ resources:
       tasks:
         - task_key: raw_ingestion
           notebook_task:
-            notebook_path: ../src/bronze/olist_bronze.ipynb
+            notebook_path: ../../src/bronze/olist_bronze.ipynb
             base_parameters:
               catalog: ${var.catalog}
               bronze_schema: ${var.bronze_schema}
