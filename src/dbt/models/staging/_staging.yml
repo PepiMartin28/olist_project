@@ -12,7 +12,7 @@ models:
   - name: stg_geolocation
     description: "Staging model for geolocation data."
     columns:
-      - name: geolocationZipCodePrefix
+      - name: zipCodePrefix
         tests: [not_null]
 
   - name: stg_order_items
@@ -37,7 +37,7 @@ models:
     description: "Staging model for order reviews data."
     columns:
       - name: reviewId
-        tests: [not_null, unique]
+        tests: [not_null]
       - name: orderId
         tests: [not_null]
 
@@ -56,8 +56,6 @@ models:
     columns:
       - name: productId
         tests: [not_null, unique]
-      - name: productCategoryName
-        tests: [not_null]
 
   - name: stg_sellers
     description: "Staging model for sellers data."

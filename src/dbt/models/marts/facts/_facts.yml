@@ -4,29 +4,26 @@ models:
   - name: fact_orders
     columns:
       - name: id
-        tests:
-          - not_null
-          - unique
+        tests: [not_null, unique]
       - name: fulfillmentStatus
         tests:
           - accepted_values:
               values:
-                - accepted
-                - approved
-                - delivered
-                - shipped
-                - canceled
+                - created 
+                - approved 
                 - invoiced
                 - processing
+                - shipped
+                - delivered
                 - unavailable
+                - canceled
       - name: avgReviewScore
         tests:
           - dbt_utils.accepted_range:
               min_value: 1
               max_value: 5
       - name: purchaseDate
-        tests:
-          - not_null
+        tests: [not_null]
 
   - name: fact_order_items
     tests:
@@ -42,8 +39,7 @@ models:
               to: ref('fact_orders')
               field: id
       - name: orderItemId
-        tests:
-          - not_null
+        tests: [not_null]
       - name: productId
         tests:
           - not_null
