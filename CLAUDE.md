@@ -48,8 +48,8 @@ regions concentrate the worst delivery times?*
   `processedTimestamp` audit column.
 - **Gold** — Implemented with dbt (dbt-databricks) under `src/dbt/`. Dimensional
   model written to schema `olist_gold`: a **staging** layer (views over silver) +
-  **dimensions** and **facts** (tables). Aggregates are still pending. See §8 for
-  the full model inventory.
+  **dimensions**, **facts**, and **aggregates** (tables). See §8 for the full
+  model inventory.
 
 Flow: `Kaggle → bronze (raw STRING Delta) → silver (typed, clean) → gold (dbt)`
 
@@ -118,11 +118,22 @@ Flow: `Kaggle → bronze (raw STRING Delta) → silver (typed, clean) → gold (
 │           └── marts/                  # tables in olist_gold
 │               ├── dimensions/         # dim_regions, dim_geolocation, dim_categories,
 │               │                       #   dim_products, dim_customers, dim_sellers
-│               └── facts/              # fact_orders, fact_order_items
+│               ├── facts/              # fact_orders, fact_order_items
+│               └── aggregates/         # agg_delivery_vs_satisfaction,
+│                                       #   agg_delivery_by_seller, agg_delivery_by_customer_region
+├── resources/                # Asset Bundle resources (included via databricks.yml)
+│   ├── vars.yml              # variable declarations (catalog, schemas, warehouse_id, table names)
+│   ├── targets/
+│   │   ├── dev.yml           # dev target (default, mode development)
+│   │   └── prod.yml          # prod target (mode production, catalog → olist_project_prod)
+│   └── jobs/                 # Databricks Workflows wiring the medallion layers
+│       ├── olist_bronze_layer.yml   # 1 task: raw_ingestion (kagglehub env)
+│       ├── olist_silver_layer.yml   # silver_setup → 8 parallel silver notebooks
+│       └── olist_gold_layer.yml     # dbt deps/run/test (dbt-databricks env)
 ├── tests/                    # conftest.py + sample_taxis_test.py (bundle template, not yet real tests)
 ├── .gitignore
 ├── CLAUDE.md
-├── databricks.yml            # Asset Bundle config (bundle, variables, dev/prod targets)
+├── databricks.yml            # Asset Bundle entrypoint (bundle name + include: resources/**)
 ├── pyproject.toml            # Python packaging and dependencies
 └── README.md
 ```
@@ -177,13 +188,13 @@ All tables live in `{catalog}.olist_silver.*`.
 
 Implemented with **dbt-databricks**. dbt project `dbt_olist`, profile `olist`.
 The dbt project under `src/dbt/` is the source of truth. **Staging + dimensions +
-facts are implemented; aggregates are not yet built.**
+facts + aggregates are all implemented.**
 
 ### Project config
 
 - **Two layers, both written to schema `olist_gold`:**
   - `staging/` → materialized as **views** (1:1 over silver, column renames only).
-  - `marts/` (dimensions + facts) → materialized as **tables**.
+  - `marts/` (dimensions + facts + aggregates) → materialized as **tables**.
 - **Catalog** comes from `var('silver_catalog')`, defaulted from
   `env_var('DBT_CATALOG', 'olist_project_dev')` in `dbt_project.yml`.
 - **Sources** (`_sources.yml`) point to `olist_silver.*` (catalog from the same
@@ -235,6 +246,24 @@ facts are implemented; aggregates are not yet built.**
 - `fact_order_items` — one row per item (grain `orderId + orderItemId`): `productId`,
   `sellerId`, `price`, `freightValue`.
 
+### Aggregates (`marts/aggregates/`)
+
+All three are late-delivery analytics built on `fact_orders` (filtered to
+`isLate is not null`, i.e. delivered orders only) and share the metric columns
+`totalOrders`, `lateOrders`, `lateRatePct` (`lateOrders * 100.0 / totalOrders`).
+
+- `agg_delivery_vs_satisfaction` — one row per rounded review score. Grouped by
+  `coalesce(round(avgReviewScore), -1)` (the `-1` bucket = orders with no review),
+  so the satisfaction key ranges -1..5.
+- `agg_delivery_by_seller` — one row per `sellerId`. Joins `fact_order_items` →
+  `dim_sellers` and dedups to order/seller pairs before aggregating against
+  `fact_orders`.
+- `agg_delivery_by_customer_region` — one row per `stateName`. Resolves each order's
+  region via `dim_customers` → `dim_geolocation` → `dim_regions`.
+
+> Note: the region aggregate is keyed by **customer state** (`agg_delivery_by_customer_region`),
+> replacing the originally planned `agg_delivery_by_state`.
+
 ### Tests (in `_*.yml` alongside models)
 
 - Staging: `not_null` / `unique` on keys.
@@ -247,13 +276,16 @@ facts are implemented; aggregates are not yet built.**
   `unique_combination_of_columns(orderId, orderItemId)`, `relationships` to
   `fact_orders`/`dim_products`/`dim_sellers`, `accepted_range(min:0)` on
   `price`/`freightValue`.
+- Aggregates: `not_null` + `unique` on the grouping key (`avgReviewScore`,
+  `sellerId`, `stateName`); `accepted_range(min:0)` on `totalOrders`/`lateOrders`,
+  `accepted_range(0..100)` on `lateRatePct`; `agg_delivery_vs_satisfaction` uses
+  `accepted_range(-1..5)` (the `-1` no-review bucket); `agg_delivery_by_seller.sellerId`
+  has a `relationships` FK → `dim_sellers`.
 
-### Not yet built
+### Status
 
-- **Aggregates** (`agg_delivery_by_seller`, `agg_delivery_by_state`,
-  `agg_delivery_vs_satisfaction`) — planned, not implemented.
-- **Orchestration** — no `resources/*.yml` jobs/Workflows wiring bronze → silver →
-  dbt yet (see §10).
+All gold layers (staging, dimensions, facts, aggregates) **and** orchestration
+are now implemented. See §11 for the Workflows that wire bronze → silver → dbt.
 
 ---
 
@@ -283,11 +315,56 @@ facts are implemented; aggregates are not yet built.**
   `coalesce(english, portuguese)` — products without an English translation keep
   their Portuguese category name (they are NOT dropped).
 - **Volume path resolved**: `/Volumes/{catalog}/{bronze_schema}/raw_data`.
-- **Bundle resources**: `databricks.yml` defines only `bundle`, `variables`
-  (`catalog`, `bronze_schema`, `silver_schema`, `gold_schema`) and the
-  `dev`/`prod` targets, plus `include: resources/*.yml`. The `resources/` folder
-  does not exist yet — no jobs/pipelines/Workflows are defined. Add orchestration
-  there when ready.
+- **Bundle resources**: `databricks.yml` is now just the entrypoint — it defines
+  `bundle` (name + uuid) and `include: resources/*.yml` + `resources/**/*.yml`.
+  Everything else lives under `resources/` (see §11): variables in `vars.yml`,
+  targets in `targets/dev.yml` + `targets/prod.yml`, and the three Workflows in
+  `jobs/`. The `dev` target is `default: true`; `prod` overrides `catalog` to
+  `olist_project_prod`.
 - This file is a living document — update it whenever a decision is resolved.
+
+---
+
+## 11. Orchestration — Databricks Workflows (`resources/`)
+
+Bundle config is split out of `databricks.yml` into `resources/`, auto-included
+via `include: resources/*.yml` + `resources/**/*.yml`.
+
+### Layout
+
+- **`resources/vars.yml`** — all variable declarations (each with a `default`):
+  `catalog` (`olist_project_dev`), `bronze_schema`/`silver_schema`/`gold_schema`
+  (`olist_bronze`/`olist_silver`/`olist_gold`), `warehouse_id`, `metadata_table`,
+  plus per-table name vars (`raw_olist_*` bronze tables + `*_silver` table names)
+  passed into the notebooks as `base_parameters`.
+- **`resources/targets/dev.yml`** — `dev` target (`mode: development`,
+  `default: true`), workspace host, `olist_group_dev` `CAN_MANAGE`, and a
+  `run_as` service principal.
+- **`resources/targets/prod.yml`** — `prod` target (`mode: production`),
+  `root_path` under the deploying user, overrides `catalog → olist_project_prod`,
+  `olist_group_prod` `CAN_MANAGE`, and its own `run_as` service principal.
+
+### Jobs (`resources/jobs/`)
+
+Three jobs, one per medallion layer (no cross-job trigger wired yet — run in
+order bronze → silver → gold):
+
+- **`olist_bronze_layer.yml`** (`Olist Bronze Layer`) — single task
+  `raw_ingestion` running `src/bronze/olist_bronze.ipynb` on a serverless
+  `environments` spec (`environment_version: "5"`) with `kagglehub` as a
+  dependency. Params: `catalog`, `bronze_schema`, `metadata_table`.
+- **`olist_silver_layer.yml`** (`Olist Silver Layer`) — `silver_setup` task
+  first, then 8 silver notebook tasks each with `depends_on: silver_setup` (so
+  they fan out in parallel after setup). Each task passes `catalog`,
+  `bronze_schema`, its `raw_olist_*` source table, `silver_schema`, and its
+  `*_silver` target table.
+- **`olist_gold_layer.yml`** (`Olist Gold Layer`) — single `dbt_task` `dbt_gold`
+  on a `dbt` serverless env (`dbt-databricks>=1.0.0,<2.0.0`), `project_directory:
+  ../../src/dbt`, `catalog`/`schema`/`warehouse_id` from vars, running
+  `dbt deps` → `dbt run` → `dbt test` (both with
+  `--vars '{silver_catalog: ${var.catalog}}'`).
+
+> `email_notifications.on_failure` is scaffolded but commented out in all three
+> job files.
 
 ---
