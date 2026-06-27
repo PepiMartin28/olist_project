@@ -21,12 +21,15 @@ dev = [
     "ipykernel",
 ]
 
-[project.scripts]
-main = "olist_project.main:main"
-
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
+
+# The wheel ships only the silver helper package; the notebooks and dbt project
+# are deployed by the bundle, not packaged. Built via `uv build --wheel` and
+# installed onto the silver job's serverless environment (see databricks.yml).
+[tool.hatch.build.targets.wheel]
+packages = ["src/olist_silver"]
 
 [tool.ruff]
 line-length = 120
@@ -34,4 +37,4 @@ line-length = 120
 builtins = ["spark", "dbutils", "display", "displayHTML", "getArgument"]
 
 [tool.uv]
-package = false
+package = true

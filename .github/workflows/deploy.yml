@@ -43,6 +43,10 @@ jobs:
 
       - uses: databricks/setup-cli@main
 
+      # uv builds the olist_silver wheel artifact during `bundle deploy`
+      # (artifacts.build = `uv build --wheel` in databricks.yml).
+      - uses: astral-sh/setup-uv@v5
+
       - name: Validate bundle
         run: databricks bundle validate -t ${{ inputs.target }}
 

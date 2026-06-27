@@ -7,3 +7,11 @@ bundle:
 include:
   - resources/*.yml
   - resources/**/*.yml
+
+# Builds the olist_silver helper wheel and uploads it as a bundle artifact.
+# The silver job's serverless environment installs it via `dist/*.whl`.
+artifacts:
+  olist_silver_wheel:
+    type: whl
+    build: uv build --wheel
+    path: .
