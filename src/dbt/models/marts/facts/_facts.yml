@@ -2,15 +2,24 @@ version: 2
 
 models:
   - name: fact_orders
+    description: >
+      One row per order. Time metrics are stored in HOURS (the atomic grain);
+      derive days downstream as hours / 24.0. isLate is ternary: null when the
+      order was never delivered, true/false only for delivered orders — filter
+      `isLate is not null` before computing late rates.
     columns:
       - name: id
+        description: "Order id (primary key)."
         tests: [not_null, unique]
+      - name: customerId
+        description: "FK → dim_customers.id."
       - name: fulfillmentStatus
+        description: "Order status (= orderStatus from the source)."
         tests:
           - accepted_values:
               values:
-                - created 
-                - approved 
+                - created
+                - approved
                 - invoiced
                 - processing
                 - shipped
@@ -18,48 +27,60 @@ models:
                 - unavailable
                 - canceled
       - name: avgReviewScore
+        description: "Average review score per order (continuous decimal, not the discrete 1–5 enum, since an order can have several reviews)."
         tests:
           - dbt_utils.accepted_range:
               min_value: 1
               max_value: 5
       - name: purchaseDate
+        description: "Order purchase timestamp."
         tests: [not_null]
       # Forward durations: should never be negative. A negative value means the
       # source timestamps are out of order. Tested as `warn` (source anomalies we
       # surface but do not block on). deliveryDelayHours is intentionally NOT
       # tested here — it is legitimately negative for early deliveries.
       - name: processingHours
+        description: "Hours from purchase to approval."
         tests:
           - dbt_utils.accepted_range:
               min_value: 0
               config:
                 severity: warn
       - name: deliveryHours
+        description: "Hours from purchase to customer delivery."
         tests:
           - dbt_utils.accepted_range:
               min_value: 0
               config:
                 severity: warn
       - name: courierHours
+        description: "Hours from carrier hand-off to customer delivery."
         tests:
           - dbt_utils.accepted_range:
               min_value: 0
               config:
                 severity: warn
       - name: totalTimeHours
+        description: "Total hours across the order lifecycle."
         tests:
           - dbt_utils.accepted_range:
               min_value: 0
               config:
                 severity: warn
       - name: estimatedHours
+        description: "Hours from purchase to the estimated delivery date."
         tests:
           - dbt_utils.accepted_range:
               min_value: 0
               config:
                 severity: warn
+      - name: deliveryDelayHours
+        description: "Actual minus estimated delivery, in hours. Negative for early deliveries (deliberately not range-tested)."
+      - name: isLate
+        description: "Ternary late flag: null if never delivered, otherwise true/false for delivered orders."
 
   - name: fact_order_items
+    description: "One row per order line item (grain orderId + orderItemId)."
     tests:
       - dbt_utils.unique_combination_of_columns:
           combination_of_columns:
@@ -67,31 +88,37 @@ models:
             - orderItemId
     columns:
       - name: orderId
+        description: "FK → fact_orders.id."
         tests:
           - not_null
           - relationships:
               to: ref('fact_orders')
               field: id
       - name: orderItemId
+        description: "Line item sequence within the order."
         tests: [not_null]
       - name: productId
+        description: "FK → dim_products.id."
         tests:
           - not_null
           - relationships:
               to: ref('dim_products')
               field: id
       - name: sellerId
+        description: "FK → dim_sellers.id."
         tests:
           - not_null
           - relationships:
               to: ref('dim_sellers')
               field: id
       - name: price
+        description: "Item price."
         tests:
           - dbt_utils.accepted_range:
               min_value: 0
           - not_null
       - name: freightValue
+        description: "Freight (shipping) value for the item."
         tests:
           - dbt_utils.accepted_range:
               min_value: 0

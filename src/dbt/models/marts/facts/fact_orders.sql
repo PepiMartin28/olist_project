@@ -8,16 +8,16 @@ with review_score_stg as (
 
 select
     orders.orderId as id,
-    orders.customerId as customerId,
+    orders.customerId,
     orders.orderStatus as fulfillmentStatus,
-    reviews.avgReviewScore as avgReviewScore,
+    reviews.avgReviewScore,
     cast(orders.orderPurchaseTimestamp as date) as purchaseDate,
-    timestampdiff(HOUR, orders.orderPurchaseTimestamp, orders.orderApprovedAt) as processingHours,
-    timestampdiff(HOUR, orders.orderApprovedAt, orders.orderDeliveredCarrierDate) as deliveryHours,
-    timestampdiff(HOUR, orders.orderDeliveredCarrierDate, orders.orderDeliveredCustomerDate) as courierHours,
-    timestampdiff(HOUR, orders.orderPurchaseTimestamp, orders.orderDeliveredCustomerDate) as totalTimeHours,
-    timestampdiff(HOUR, orders.orderPurchaseTimestamp, orders.orderEstimatedDeliveryDate) as estimatedHours,
-    timestampdiff(HOUR, orders.orderEstimatedDeliveryDate, orders.orderDeliveredCustomerDate) as deliveryDelayHours,
+    timestampdiff(hour, orders.orderPurchaseTimestamp, orders.orderApprovedAt) as processingHours,
+    timestampdiff(hour, orders.orderApprovedAt, orders.orderDeliveredCarrierDate) as deliveryHours,
+    timestampdiff(hour, orders.orderDeliveredCarrierDate, orders.orderDeliveredCustomerDate) as courierHours,
+    timestampdiff(hour, orders.orderPurchaseTimestamp, orders.orderDeliveredCustomerDate) as totalTimeHours,
+    timestampdiff(hour, orders.orderPurchaseTimestamp, orders.orderEstimatedDeliveryDate) as estimatedHours,
+    timestampdiff(hour, orders.orderEstimatedDeliveryDate, orders.orderDeliveredCustomerDate) as deliveryDelayHours,
     case
         when orders.orderDeliveredCustomerDate is null then null
         when orders.orderDeliveredCustomerDate > orders.orderEstimatedDeliveryDate then true

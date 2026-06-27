@@ -1,8 +1,8 @@
 select
-    item.orderId as orderId,
-    item.orderItemId as orderItemId,
-    item.productId as productId,
-    item.sellerId as sellerId,
-    item.price as price,
-    item.freightValue as freightValue
+    item.orderId,
+    item.orderItemId,
+    item.productId,
+    item.sellerId,
+    item.price,
+    item.freightValue
 from {{ ref('stg_order_items') }} item
