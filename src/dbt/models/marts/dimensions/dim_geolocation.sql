@@ -18,8 +18,8 @@ dominant_region as (
             loc.zipCodePrefix as zipCodePrefix,
             region.id as regionId,
             count(*) as cnt
-        from locations as loc
-        join {{ ref('dim_regions') }} as region
+        from locations loc
+        join {{ ref('dim_regions') }} region
             on loc.city = region.city
             and loc.stateName = region.stateName
         group by loc.zipCodePrefix, region.id
@@ -31,10 +31,10 @@ dominant_region as (
 )
 
 select
-    a.zipCodePrefix,
-    a.latitude,
-    a.longitude,
-    d.regionId
-from geo_avg a
-left join dominant_region d
-    on a.zipCodePrefix = d.zipCodePrefix
+    geo.zipCodePrefix,
+    geo.latitude,
+    geo.longitude,
+    region.regionId
+from geo_avg geo
+left join dominant_region region
+    on geo.zipCodePrefix = region.zipCodePrefix
