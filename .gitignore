@@ -227,3 +227,8 @@ scratch/**
 
 **/agent-memory/
 
+# dbt — installed packages and run artifacts (package-lock.yml is kept/versioned)
+src/dbt/dbt_packages/
+src/dbt/logs/
+src/dbt/target/
+src/dbt/.user.yml
