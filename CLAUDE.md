@@ -116,6 +116,20 @@ Flow: `Kaggle → bronze (raw STRING Delta) → silver (typed, clean) → gold (
     (`processedTimestamp` is `current_timestamp()`, identical across the batch), so
     "latest wins" cannot be implemented faithfully and a `row_number()` ordering
     would only fake a guarantee the data does not provide.
+13. **Silver logic lives in an installable wheel, not inline in each notebook.**
+    The per-table transformations (`parse_timestamp`, `is_valid_uuid`,
+    `null_invalid_uuid`, `with_processed_timestamp`) and the `MERGE` builder
+    (`build_merge_sql` / `merge_into`) live in the `olist_silver` package
+    (`src/olist_silver/`). The package is built as a wheel by the bundle
+    (`artifacts.olist_silver_wheel` in `databricks.yml`, `uv build --wheel`) and
+    installed onto the silver job's serverless `environment` (`dist/*.whl`). Each
+    silver notebook just `import`s the helpers, so the hand-written `MERGE` SQL
+    (previously duplicated 8×, and the source of column-drift bugs) exists in one
+    place. `merge_into` supports composite keys (`order_items`, `order_payments`,
+    `order_reviews`) and derives the update columns from the source DataFrame's
+    schema, so adding a column to a silver table no longer means editing a MERGE
+    by hand. `build_merge_sql` is a pure string builder, decoupled from
+    `spark.sql`, so it can be unit-tested without a Spark session.
 
 ---
 
@@ -127,6 +141,10 @@ Flow: `Kaggle → bronze (raw STRING Delta) → silver (typed, clean) → gold (
 ├── .vscode/                  # editor settings
 ├── fixtures/                 # sample data fixtures for tests (currently only .gitkeep)
 ├── src/
+│   ├── olist_silver/                   # installable helper package (wheel) for silver
+│   │   ├── __init__.py                 # re-exports the public helpers
+│   │   └── transformations.py          # parse_timestamp, is_valid_uuid, null_invalid_uuid,
+│   │                                   #   with_processed_timestamp, build_merge_sql, merge_into
 │   ├── bronze/
 │   │   └── olist_bronze.ipynb          # ingestion: Kaggle → Volumes → Delta
 │   ├── silver/
@@ -237,7 +255,11 @@ facts + aggregates are all implemented.**
 - **Sources** (`_sources.yml`) point to `olist_silver.*` (catalog from the same
   var). Connection (`profiles.yml`) reads `DBT_HTTP_PATH` and `DBT_TOKEN` from env.
   Source **freshness** is configured (`loaded_at_field: processedTimestamp`,
-  `warn_after` 24h / `error_after` 72h) — run via `dbt source freshness`.
+  `warn_after` 24h) and runs as the first step of the gold job (see §11). It is
+  **warn-only by design**: only `warn_after` is set (no `error_after`), so
+  `dbt source freshness` reports staleness but always exits 0 and never fails the
+  job — ingestion is batch / on-new-version, so silver legitimately goes >24h
+  stale between Kaggle releases and a hard error gate would cause false failures.
 - **Packages**: `dbt_utils` (`packages.yml`).
 - **Docs**: every source table and model carries a `description`, and key/metric
   columns are documented. The three repeated aggregate metric columns
@@ -428,8 +450,9 @@ order bronze → silver → gold):
 - **`olist_gold_layer.yml`** (`Olist Gold Layer`) — single `dbt_task` `dbt_gold`
   on a `dbt` serverless env (`dbt-databricks>=1.0.0,<2.0.0`), `project_directory:
   ../../src/dbt`, `catalog`/`schema`/`warehouse_id` from vars, running
-  `dbt deps` → `dbt run` → `dbt test` (both with
-  `--vars '{silver_catalog: ${var.catalog}}'`).
+  `dbt deps` → `dbt source freshness` → `dbt run` → `dbt test` (the last three
+  with `--vars '{silver_catalog: ${var.catalog}}'`). `source freshness` is
+  warn-only (see §8): it logs silver staleness but never fails the job.
 
 > `email_notifications.on_failure` is scaffolded but commented out in all three
 > job files.
