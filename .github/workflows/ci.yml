@@ -1,0 +1,67 @@
+name: CI
+
+# Quality checks. Run on every push to a branch other than main, and on PRs
+# targeting main. These checks are fully OFFLINE: they never touch the
+# Databricks workspace and require NO credentials, so they are safe to run on
+# arbitrary feature branches.
+on:
+  push:
+    branches-ignore:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  python-lint:
+    name: ruff (Python)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install ruff
+        run: pip install ruff
+      - name: Lint
+        run: ruff check .
+      - name: Format check
+        run: ruff format --check .
+
+  sql-lint:
+    name: sqlfluff (dbt SQL)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install sqlfluff
+        run: pip install sqlfluff
+      - name: Lint dbt models
+        run: sqlfluff lint src/dbt/models
+
+  dbt-parse:
+    name: dbt parse
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: src/dbt
+    # dbt parse compiles the project and validates models + _*.yml without
+    # connecting to the warehouse. Dummy connection env vars are enough to
+    # render profiles.yml; they are never used to connect.
+    env:
+      DBT_PROFILES_DIR: ${{ github.workspace }}/src/dbt
+      DBT_HTTP_PATH: "placeholder"
+      DBT_TOKEN: "placeholder"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install dbt-databricks
+        run: pip install "dbt-databricks>=1.0.0,<2.0.0"
+      - name: dbt deps
+        run: dbt deps
+      - name: dbt parse
+        run: dbt parse

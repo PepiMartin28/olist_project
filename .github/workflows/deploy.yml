@@ -1,0 +1,50 @@
+name: Deploy bundle
+
+# Manual deploy of the Databricks Asset Bundle to dev or prod.
+# Triggered only from the GitHub Actions tab ("Run workflow"), which is
+# available exclusively to repo collaborators with write access.
+#
+# Access control (no required reviewers, per design):
+#   - dev : deployable on demand from any branch.
+#   - prod: the `prod` GitHub Environment scopes the prod service-principal
+#           secrets and is restricted (deployment branch rule) to `main`.
+#           The guard step below also hard-fails any prod deploy not on main.
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: "Bundle target to deploy"
+        type: choice
+        options:
+          - dev
+          - prod
+        required: true
+
+jobs:
+  deploy:
+    name: deploy (${{ inputs.target }})
+    runs-on: ubuntu-latest
+    # Binds environment-scoped secrets (DATABRICKS_*) and the deployment
+    # branch rule for the chosen target. Configure both environments in
+    # repo Settings → Environments.
+    environment: ${{ inputs.target }}
+    env:
+      DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST }}
+      DATABRICKS_CLIENT_ID: ${{ secrets.DATABRICKS_CLIENT_ID }}
+      DATABRICKS_CLIENT_SECRET: ${{ secrets.DATABRICKS_CLIENT_SECRET }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Guard — prod only from main
+        if: ${{ inputs.target == 'prod' && github.ref != 'refs/heads/main' }}
+        run: |
+          echo "::error::prod deploys are only allowed from the main branch (got ${{ github.ref }})."
+          exit 1
+
+      - uses: databricks/setup-cli@main
+
+      - name: Validate bundle
+        run: databricks bundle validate -t ${{ inputs.target }}
+
+      - name: Deploy bundle
+        run: databricks bundle deploy -t ${{ inputs.target }}
