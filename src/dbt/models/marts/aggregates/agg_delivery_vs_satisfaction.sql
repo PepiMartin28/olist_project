@@ -8,9 +8,7 @@ with rounded_review_score as (
 
 select
     avgReviewScore,
-    count(*) as totalOrders,
-    count_if(isLate) as lateOrders,
-    (count_if(isLate) * 100.0 / count(*)) as lateRatePct
+    {{ delivery_metrics(is_late_column='rounded_review_score.isLate') }}
 from rounded_review_score
 group by avgReviewScore
 order by avgReviewScore
