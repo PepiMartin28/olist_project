@@ -15,6 +15,7 @@ dependencies = [
 dev = [
     "pytest",
     "ruff",
+    "sqlfluff",
     "databricks-dlt",
     "databricks-connect>=15.4,<15.5",
     "ipykernel",
@@ -29,6 +30,8 @@ build-backend = "hatchling.build"
 
 [tool.ruff]
 line-length = 120
+# Globals injected by the Databricks notebook runtime (not real undefined names).
+builtins = ["spark", "dbutils", "display", "displayHTML", "getArgument"]
 
 [tool.uv]
 package = false

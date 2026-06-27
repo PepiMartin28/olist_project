@@ -1,0 +1,37 @@
+[sqlfluff]
+dialect = databricks
+# dbt templater: sqlfluff invokes dbt to render the models, so ref(), project
+# macros and dbt_utils.* all resolve for real (no stubs). This connects to the
+# Databricks warehouse during compilation, so the SQL-lint CI job runs only on
+# PRs to main with credentials — never on arbitrary branch pushes.
+templater = dbt
+max_line_length = 120
+# Disabled rules:
+#   CP02 (capitalisation.identifiers): columns use camelCase by convention
+#     (CLAUDE.md §9), which sqlfluff's capitalisation rules can't model.
+#   RF04 (references.keywords): `name`, `state`, etc. are intentional, unquoted
+#     column names in the dimensions.
+exclude_rules = capitalisation.identifiers, references.keywords
+
+[sqlfluff:templater:dbt]
+project_dir = src/dbt
+profiles_dir = src/dbt
+profile = olist
+target = dev
+
+# --- Conventions (CLAUDE.md §9) ---------------------------------------------
+
+# Relation aliases (tables, CTEs, refs) are written WITHOUT the `as` keyword.
+[sqlfluff:rules:aliasing.table]
+aliasing = implicit
+
+# Column aliases DO use `as`.
+[sqlfluff:rules:aliasing.column]
+aliasing = explicit
+
+# Keywords and functions in lower case.
+[sqlfluff:rules:capitalisation.keywords]
+capitalisation_policy = lower
+
+[sqlfluff:rules:capitalisation.functions]
+extended_capitalisation_policy = lower
