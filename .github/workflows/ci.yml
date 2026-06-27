@@ -31,15 +31,31 @@ jobs:
   sql-lint:
     name: sqlfluff (dbt SQL)
     runs-on: ubuntu-latest
+    # sqlfluff uses the dbt templater, which compiles the project against the
+    # Databricks warehouse — so it needs real credentials. To avoid exposing
+    # secrets to arbitrary branch pushes, this job runs ONLY on PRs to main and
+    # binds the `dev` environment (which scopes the DBT_* secrets).
+    if: github.event_name == 'pull_request'
+    environment: dev
+    env:
+      DBT_PROFILES_DIR: ${{ github.workspace }}/src/dbt
+      DBT_HTTP_PATH: ${{ secrets.DBT_HTTP_PATH }}
+      DBT_TOKEN: ${{ secrets.DBT_TOKEN }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - name: Install sqlfluff
-        run: pip install sqlfluff
+      - name: Install sqlfluff + dbt templater
+        run: pip install sqlfluff sqlfluff-templater-dbt "dbt-databricks>=1.0.0,<2.0.0"
+      - name: dbt deps
+        working-directory: src/dbt
+        run: dbt deps
+      # sqlfluff runs from the repo root: .sqlfluff resolves project_dir/
+      # profiles_dir (src/dbt) relative to the working directory.
       - name: Lint dbt models
         run: sqlfluff lint src/dbt/models
+
 
   dbt-parse:
     name: dbt parse
