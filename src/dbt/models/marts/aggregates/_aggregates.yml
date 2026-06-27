@@ -2,8 +2,13 @@ version: 2
 
 models:
   - name: agg_delivery_vs_satisfaction
+    description: >
+      Late-delivery rate per rounded review score. Grouped by
+      `coalesce(round(avgReviewScore), -1)` so the satisfaction key ranges
+      -1..5, where -1 is the bucket of delivered orders with no review.
     columns:
       - name: avgReviewScore
+        description: "Rounded average review score (-1..5); -1 = delivered orders with no review."
         tests:
           - dbt_utils.accepted_range:
               min_value: -1
@@ -11,16 +16,19 @@ models:
           - unique
           - not_null
       - name: totalOrders
+        description: "{{ doc('total_orders') }}"
         tests:
           - not_null
           - dbt_utils.accepted_range:
               min_value: 0
       - name: lateOrders
+        description: "{{ doc('late_orders') }}"
         tests:
           - not_null
           - dbt_utils.accepted_range:
               min_value: 0
       - name: lateRatePct
+        description: "{{ doc('late_rate_pct') }}"
         tests:
           - not_null
           - dbt_utils.accepted_range:
@@ -28,31 +36,44 @@ models:
               max_value: 100
 
   - name: agg_delivery_by_customer_region
+    description: >
+      Late-delivery rate per customer state. Each order's region is resolved via
+      dim_customers → dim_geolocation → dim_regions using LEFT joins; orders whose
+      customer zip does not resolve fall into an 'UNKNOWN' bucket so counts
+      reconcile with the total of delivered orders.
     columns:
       - name: stateName
+        description: "Customer state; 'UNKNOWN' for orders whose customer zip does not resolve to a region."
         tests:
           - not_null
           - unique
       - name: totalOrders
+        description: "{{ doc('total_orders') }}"
         tests:
           - not_null
           - dbt_utils.accepted_range:
               min_value: 0
       - name: lateOrders
+        description: "{{ doc('late_orders') }}"
         tests:
           - not_null
           - dbt_utils.accepted_range:
               min_value: 0
       - name: lateRatePct
+        description: "{{ doc('late_rate_pct') }}"
         tests:
           - not_null
           - dbt_utils.accepted_range:
               min_value: 0
               max_value: 100
-  
+
   - name: agg_delivery_by_seller
+    description: >
+      Late-delivery rate per seller. Joins fact_order_items → dim_sellers and
+      dedups to order/seller pairs before aggregating against fact_orders.
     columns:
       - name: sellerId
+        description: "Seller surrogate key (FK → dim_sellers.id)."
         tests:
           - not_null
           - unique
@@ -60,16 +81,19 @@ models:
               to: ref('dim_sellers')
               field: id
       - name: totalOrders
+        description: "{{ doc('total_orders') }}"
         tests:
           - not_null
           - dbt_utils.accepted_range:
               min_value: 0
       - name: lateOrders
+        description: "{{ doc('late_orders') }}"
         tests:
           - not_null
           - dbt_utils.accepted_range:
               min_value: 0
       - name: lateRatePct
+        description: "{{ doc('late_rate_pct') }}"
         tests:
           - not_null
           - dbt_utils.accepted_range:
