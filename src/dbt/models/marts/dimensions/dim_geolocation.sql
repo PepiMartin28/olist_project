@@ -12,17 +12,21 @@ geo_avg as (
 ),
 
 dominant_region as (
-    select
-        loc.zipCodePrefix,
-        region.id as regionId
-    from locations as loc
-    join {{ ref('dim_regions') }} as region
-        on loc.city = region.city
-        and loc.stateName = region.stateName
-    group by loc.zipCodePrefix, region.id
+    select zipCodePrefix, regionId
+    from (
+        select
+            loc.zipCodePrefix as zipCodePrefix,
+            region.id as regionId,
+            count(*) as cnt
+        from locations as loc
+        join {{ ref('dim_regions') }} as region
+            on loc.city = region.city
+            and loc.stateName = region.stateName
+        group by loc.zipCodePrefix, region.id
+    )
     qualify row_number() over (
-        partition by loc.zipCodePrefix
-        order by count(*) desc, region.id
+        partition by zipCodePrefix
+        order by cnt desc, regionId
     ) = 1
 )
 

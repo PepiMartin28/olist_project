@@ -1,9 +1,9 @@
 select distinct
     {{ dbt_utils.generate_surrogate_key([
-        'geolocationCityName',
-        'geolocationState'
+        'city',
+        'stateName'
     ]) }} as id,
-    geolocationCityName as city,
-    geolocationState as stateName
+    city,
+    stateName
 from {{ ref('stg_geolocation') }}
-where geolocationCityName is not null and geolocationState is not null
+where city is not null and stateName is not null
