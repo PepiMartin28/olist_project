@@ -6,4 +6,4 @@ select
     shippingLimitDate,
     price,
     freightValue
-from {{ source('olist_silver', 'order_items_silver') }} 
+from {{ source('olist_silver', 'order_items_silver') }}

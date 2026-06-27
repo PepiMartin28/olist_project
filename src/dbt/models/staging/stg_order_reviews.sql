@@ -6,4 +6,4 @@ select
     reviewCommentMessage,
     reviewCreationTimestamp,
     reviewAnswerTimestamp
-from {{ source('olist_silver', 'order_reviews_silver') }} 
+from {{ source('olist_silver', 'order_reviews_silver') }}

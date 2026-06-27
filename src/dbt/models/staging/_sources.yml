@@ -2,14 +2,34 @@ version: 2
 
 sources:
   - name: olist_silver
+    description: >
+      Cleaned, typed and validated silver layer over the Olist Brazilian
+      E-Commerce dataset. One Delta table per source entity, loaded via
+      idempotent `MERGE INTO`. Every table carries a `processedTimestamp`
+      audit column recording when the row was last written by the pipeline.
     catalog: "{{ var('silver_catalog') }}"
     schema: olist_silver
+    # Freshness is measured against the silver audit column. `max(processedTimestamp)`
+    # reflects the last successful silver run; if the pipeline stops the sources go
+    # stale. Thresholds are lenient because ingestion is batch / on-new-version.
+    loaded_at_field: processedTimestamp
+    freshness:
+      warn_after: { count: 24, period: hour }
+      error_after: { count: 72, period: hour }
     tables:
       - name: customers_silver
+        description: "One row per customer (`customerId`), with `customerUniqueId`, zip code prefix and denormalized city/state."
       - name: geolocation_silver
+        description: "One row per zip code prefix: averaged lat/lon and first non-null city/state. Already deduplicated in silver."
       - name: orders_silver
+        description: "One row per order (`orderId`), with status and all lifecycle timestamps parsed with explicit format."
       - name: order_items_silver
+        description: "One row per order line item (`orderId` + `orderItemId`): product, seller, price and freight value."
       - name: order_reviews_silver
+        description: "One row per review (`orderId` + `reviewId`): satisfaction score and review/answer timestamps."
       - name: order_payments_silver
+        description: "One row per payment record (`orderId` + `paymentSequential`)."
       - name: products_silver
+        description: "Product catalog (`productId`) with physical attributes and English category name (coalesced from the PT→EN translation)."
       - name: sellers_silver
+        description: "One row per seller (`sellerId`), with zip code prefix and denormalized city/state."

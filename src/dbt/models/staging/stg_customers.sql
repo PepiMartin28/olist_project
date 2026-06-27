@@ -1,6 +1,6 @@
 select
-    customerId as customerId,
-    customerUniqueId as customerUniqueId,
+    customerId,
+    customerUniqueId,
     customerZipCodePrefix,
     customerCity,
     customerState
