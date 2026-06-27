@@ -13,10 +13,10 @@ with customer_region as (
 select
     customers.stateName as stateName,
     count(*) as totalOrders,
-    countif(isLate) as lateOrders,
-    (countif(isLate) * 100.0 / count(*)) as lateRatePct
+    count_if(isLate) as lateOrders,
+    (count_if(isLate) * 100.0 / count(*)) as lateRatePct
 from {{ ref('fact_orders') }} orders
 join customer_region customers
-    on orders.customerId = customers.id
+    on orders.customerId = customers.customerId
 where orders.isLate is not null
 group by customers.stateName

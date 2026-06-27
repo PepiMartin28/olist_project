@@ -9,8 +9,8 @@ with rounded_review_score as (
 select
     avgReviewScore,
     count(*) as totalOrders,
-    countif(isLate) as lateOrders,
-    (countif(isLate) * 100.0 / count(*)) as lateRatePct
+    count_if(isLate) as lateOrders,
+    (count_if(isLate) * 100.0 / count(*)) as lateRatePct
 from rounded_review_score
 group by avgReviewScore
 order by avgReviewScore

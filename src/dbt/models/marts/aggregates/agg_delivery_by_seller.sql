@@ -12,8 +12,8 @@ with orders_sales as (
 select
     items_seller.sellerId as sellerId,
     count(*) as totalOrders,
-    countif(isLate) as lateOrders,
-    (countif(isLate) * 100.0 / count(*)) as lateRatePct
+    count_if(isLate) as lateOrders,
+    (count_if(isLate) * 100.0 / count(*)) as lateRatePct
 from {{ ref('fact_orders') }} orders
 join orders_sales items_seller
     on orders.id = items_seller.orderId
