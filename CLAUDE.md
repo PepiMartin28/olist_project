@@ -43,7 +43,8 @@ regions concentrate the worst delivery times?*
   check against `olist_source_metadata` — only runs if a new Kaggle dataset
   version is detected. Uses `mode("overwrite")` (full reload per version).
 - **Silver** — Cleaned, typed, and validated data. Explicit casts, UUID
-  validation, timestamp parsing with explicit format. Loaded via
+  validation (strict on merge keys, null-out for FKs — see §4.6), timestamp
+  parsing with `try_to_timestamp` + explicit format. Loaded via
   `MERGE INTO` for idempotent reprocessing. All tables include a
   `processedTimestamp` audit column.
 - **Gold** — Implemented with dbt (dbt-databricks) under `src/dbt/`. Dimensional
@@ -68,11 +69,27 @@ Flow: `Kaggle → bronze (raw STRING Delta) → silver (typed, clean) → gold (
 4. **Bronze uses overwrite, not MERGE.** Bronze tables are fully replaced when a
    new Kaggle dataset version is ingested. Idempotency is handled by the
    `olist_source_metadata` version check, not by MERGE.
-5. **Timestamps parsed with explicit format.** All `to_timestamp()` calls use
-   `"yyyy-MM-dd HH:mm:ss"` explicitly. Never rely on Spark's auto-detection.
-6. **UUID validation before silver load.** All ID columns are validated with
-   `rlike("^[0-9a-fA-F]{32}$")` before writing to silver. Invalid rows are
-   silently dropped (expected: they are malformed source records).
+5. **Timestamps parsed with `try_to_timestamp` + explicit format.** All timestamp
+   parsing uses `expr("try_to_timestamp(col, 'yyyy-MM-dd HH:mm:ss')")`. The format
+   is always explicit (never rely on Spark's auto-detection), and the `try_`
+   variant returns NULL on unparseable input instead of throwing — required on
+   serverless compute, where ANSI mode is enabled by default and plain
+   `to_timestamp` would **fail the job** on a single malformed value.
+6. **UUID validation: strict on the merge key, null-out for FKs.** All ID columns
+   are validated with `rlike("^[0-9a-fA-F]{32}$")`. The validation is applied
+   differently depending on the column's role:
+   - **Merge-key columns** (the table's PK and any UUID that is part of the MERGE
+     `ON`) are validated in the `where` clause — invalid rows are dropped (they
+     cannot form a key). E.g. `orders.orderId`, `order_items.(orderId)`,
+     `order_reviews.(orderId, reviewId)`, `order_payments.orderId`, `sellers.sellerId`.
+   - **Foreign-key / attribute UUIDs** are NOT used to drop rows. Instead they are
+     null-ed when invalid via
+     `when(col(x).rlike(...), col(x)).otherwise(None)`, so the row survives with a
+     NULL FK rather than being lost. Applies to `orders.customerId`,
+     `order_items.productId` / `.sellerId`, and `customers.customerUniqueId`.
+   - Rationale: dropping an order because its `customerId` is malformed would lose
+     the delivery timestamps we actually analyze. Nulling the FK is also
+     consistent with gold, which already filters `where sellerId is not null`.
 7. **City/state kept denormalized in silver.** `customerCity`, `customerState`,
    `sellerCity`, `sellerState` are stored as plain strings. Surrogate key
    dimension extraction (`dim_cities`) is deferred to gold/dbt.
@@ -83,6 +100,22 @@ Flow: `Kaggle → bronze (raw STRING Delta) → silver (typed, clean) → gold (
 10. **Databricks Free Edition filesystem constraints apply.** Raw CSVs are stored
     in Volumes at `/Volumes/{catalog}/{bronze_schema}/raw_data`. Do not assume
     classic DBFS paths.
+11. **Bronze CSV read is multiline-safe.** Bronze reads each CSV in a single loop
+    with `multiLine=True, escape='"'` so free-text fields that contain embedded
+    newlines / quotes (notably `review_comment_message` in `olist_order_reviews`)
+    are not split across rows. The Delta write uses
+    `.option("overwriteSchema", "true")` so the full reload is resilient to schema
+    changes between dataset versions. There is exactly **one** ingestion loop — do
+    not reintroduce a second pass (an earlier duplicate loop re-read without the
+    multiline options and corrupted the reviews table).
+12. **`dropDuplicates` is a defensive no-op, kept non-deterministic by design.**
+    Silver dedups on the merge key (`dropDuplicates([...keys])`). In the Olist
+    source these keys are already unique, so this only guards against fully
+    identical rows — where the chosen row is irrelevant. A deterministic
+    tie-breaker was deliberately **not** added: the source has no recency column
+    (`processedTimestamp` is `current_timestamp()`, identical across the batch), so
+    "latest wins" cannot be implemented faithfully and a `row_number()` ordering
+    would only fake a guarantee the data does not provide.
 
 ---
 
@@ -323,8 +356,9 @@ are now implemented. See §11 for the Workflows that wire bronze → silver → 
 - **Tables**: `snake_case`. **Columns**: `camelCase`.
 - **Schema prefix by layer**: `olist_bronze.olist_orders`, `olist_silver.orders_silver`, etc.
 - **Every transformation must be idempotent** (re-runnable without duplicating data).
-- **Timestamps**: always use `to_timestamp(col, "yyyy-MM-dd HH:mm:ss")`.
-  Never `.cast("timestamp")` — format auto-detection is unreliable.
+- **Timestamps**: always use `expr("try_to_timestamp(col, 'yyyy-MM-dd HH:mm:ss')")`.
+  Never `.cast("timestamp")` (format auto-detection is unreliable) and never plain
+  `to_timestamp` (throws under serverless ANSI mode — see §4.5).
 - **Numeric/string casts**: `.cast()` is safe (returns NULL on failure, never throws).
   This is the standard approach for silver.
 - **dbt**: include `tests` (not_null, unique, relationships) on all gold models.
