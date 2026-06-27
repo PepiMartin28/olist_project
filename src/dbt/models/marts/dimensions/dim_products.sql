@@ -1,4 +1,4 @@
-select 
+select
     product.productId as id,
     category.id as categoryId,
     product.productNameLength as nameLength,

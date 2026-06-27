@@ -2,6 +2,10 @@ version: 2
 
 models:
   - name: dim_regions
+    description: >
+      City/region dimension. One row per distinct (city, stateName) with a
+      surrogate key generated from those two columns. Replaces the originally
+      planned dim_cities.
     tests:
       - dbt_utils.unique_combination_of_columns:
           combination_of_columns:
@@ -9,22 +13,30 @@ models:
             - stateName
     columns:
       - name: id
+        description: "Surrogate key (hash of city + stateName)."
         tests: [unique]
       - name: city
+        description: "City name."
         tests: [not_null]
       - name: stateName
+        description: "State (Brazilian UF)."
         tests: [not_null]
-  
+
   - name: dim_categories
+    description: "Product category dimension. One row per category name."
     columns:
       - name: id
+        description: "Surrogate key (hash of category name)."
         tests: [not_null, unique]
 
   - name: dim_products
+    description: "Product dimension: physical attributes plus a FK to its category."
     columns:
       - name: id
+        description: "Product surrogate key."
         tests: [not_null, unique]
       - name: categoryId
+        description: "FK → dim_categories.id (joined on name with null-safe equality)."
         tests:
           - not_null
           - relationships:
@@ -32,34 +44,46 @@ models:
               field: id
 
   - name: dim_customers
+    description: "Customer dimension. One row per customerId, with a FK to its zip-code geolocation."
     columns:
       - name: id
+        description: "Customer surrogate key (customerId)."
         tests: [unique, not_null]
       - name: uniqueId
+        description: "Customer unique id (a person can have several customerIds across orders)."
         tests: [not_null]
       - name: zipCodePrefix
+        description: "FK → dim_geolocation.zipCodePrefix."
         tests:
           - not_null
           - relationships:
               to: ref('dim_geolocation')
               field: zipCodePrefix
-  
+
   - name: dim_sellers
+    description: "Seller dimension. One row per sellerId, with a FK to its zip-code geolocation."
     columns:
       - name: id
+        description: "Seller surrogate key (sellerId)."
         tests: [not_null, unique]
       - name: zipCodePrefix
+        description: "FK → dim_geolocation.zipCodePrefix."
         tests:
           - not_null
           - relationships:
               to: ref('dim_geolocation')
               field: zipCodePrefix
-  
+
   - name: dim_geolocation
+    description: >
+      Geolocation dimension. One row per zip code prefix: averaged lat/lon plus
+      regionId = the dominant region (most frequent city/state match) for that zip.
     columns:
       - name: zipCodePrefix
+        description: "Zip code prefix (primary key)."
         tests: [not_null, unique]
       - name: regionId
+        description: "FK → dim_regions.id (dominant region for this zip)."
         tests:
           - relationships:
               to: ref('dim_regions')
