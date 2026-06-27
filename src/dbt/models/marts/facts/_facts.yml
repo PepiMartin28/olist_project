@@ -24,6 +24,40 @@ models:
               max_value: 5
       - name: purchaseDate
         tests: [not_null]
+      # Forward durations: should never be negative. A negative value means the
+      # source timestamps are out of order. Tested as `warn` (source anomalies we
+      # surface but do not block on). deliveryDelayHours is intentionally NOT
+      # tested here — it is legitimately negative for early deliveries.
+      - name: processingHours
+        tests:
+          - dbt_utils.accepted_range:
+              min_value: 0
+              config:
+                severity: warn
+      - name: deliveryHours
+        tests:
+          - dbt_utils.accepted_range:
+              min_value: 0
+              config:
+                severity: warn
+      - name: courierHours
+        tests:
+          - dbt_utils.accepted_range:
+              min_value: 0
+              config:
+                severity: warn
+      - name: totalTimeHours
+        tests:
+          - dbt_utils.accepted_range:
+              min_value: 0
+              config:
+                severity: warn
+      - name: estimatedHours
+        tests:
+          - dbt_utils.accepted_range:
+              min_value: 0
+              config:
+                severity: warn
 
   - name: fact_order_items
     tests:
