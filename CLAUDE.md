@@ -110,6 +110,8 @@ Flow: `Kaggle → bronze (raw STRING Delta) → silver (typed, clean) → gold (
 │       ├── dbt_project.yml             # project 'dbt_olist', profile 'olist'
 │       ├── profiles.yml                # databricks targets (env_var: DBT_HTTP_PATH, DBT_TOKEN)
 │       ├── packages.yml                # dbt_utils
+│       ├── macros/                      # delivery_metrics.sql (shared agg metric columns)
+│       ├── tests/                       # singular data tests (assert_region_agg_reconciles.sql)
 │       └── models/
 │           ├── staging/                # views in olist_gold (1:1 over silver, renamed cols)
 │           │   ├── _sources.yml        # sources → olist_silver.*
@@ -192,14 +194,24 @@ facts + aggregates are all implemented.**
 
 ### Project config
 
-- **Two layers, both written to schema `olist_gold`:**
+- **All written to schema `olist_gold`:**
   - `staging/` → materialized as **views** (1:1 over silver, column renames only).
-  - `marts/` (dimensions + facts + aggregates) → materialized as **tables**.
+  - `marts/dimensions` + `marts/facts` → materialized as **tables**.
+  - `marts/aggregates` → materialized as **views** (overrides the marts default in
+    `dbt_project.yml`).
 - **Catalog** comes from `var('silver_catalog')`, defaulted from
   `env_var('DBT_CATALOG', 'olist_project_dev')` in `dbt_project.yml`.
 - **Sources** (`_sources.yml`) point to `olist_silver.*` (catalog from the same
   var). Connection (`profiles.yml`) reads `DBT_HTTP_PATH` and `DBT_TOKEN` from env.
+  Source **freshness** is configured (`loaded_at_field: processedTimestamp`,
+  `warn_after` 24h / `error_after` 72h) — run via `dbt source freshness`.
 - **Packages**: `dbt_utils` (`packages.yml`).
+- **Docs**: every source table and model carries a `description`, and key/metric
+  columns are documented. The three repeated aggregate metric columns
+  (`totalOrders`, `lateOrders`, `lateRatePct`) use a shared `docs` block
+  (`marts/aggregates/_aggregates_docs.md`, referenced via `{{ doc(...) }}`) so the
+  late-rate definition is documented in one place. Build the docs site with
+  `dbt docs generate` + `dbt docs serve`.
 
 ### Staging (views, 1:1 over silver)
 
@@ -251,6 +263,9 @@ facts + aggregates are all implemented.**
 All three are late-delivery analytics built on `fact_orders` (filtered to
 `isLate is not null`, i.e. delivered orders only) and share the metric columns
 `totalOrders`, `lateOrders`, `lateRatePct` (`lateOrders * 100.0 / totalOrders`).
+These three columns are emitted by the `{{ delivery_metrics() }}` macro
+(`macros/delivery_metrics.sql`) — the single source of truth for the late-rate
+definition. Each aggregate just supplies its own grouping key and `group by`.
 
 - `agg_delivery_vs_satisfaction` — one row per rounded review score. Grouped by
   `coalesce(round(avgReviewScore), -1)` (the `-1` bucket = orders with no review),
@@ -259,12 +274,18 @@ All three are late-delivery analytics built on `fact_orders` (filtered to
   `dim_sellers` and dedups to order/seller pairs before aggregating against
   `fact_orders`.
 - `agg_delivery_by_customer_region` — one row per `stateName`. Resolves each order's
-  region via `dim_customers` → `dim_geolocation` → `dim_regions`.
+  region via `dim_customers` → `dim_geolocation` → `dim_regions` using **LEFT
+  joins**: orders whose customer zip does not resolve to a region fall into a
+  `'UNKNOWN'` bucket instead of being dropped, so the row counts **reconcile**
+  with the total of delivered orders (enforced by a singular test, see Tests).
 
 > Note: the region aggregate is keyed by **customer state** (`agg_delivery_by_customer_region`),
 > replacing the originally planned `agg_delivery_by_state`.
 
-### Tests (in `_*.yml` alongside models)
+### Tests
+
+Schema tests live in `_*.yml` alongside the models. Singular (data) tests live
+in `src/dbt/tests/*.sql` (default `test-paths`).
 
 - Staging: `not_null` / `unique` on keys.
 - Dimensions: `not_null` + `unique` on surrogate keys; `relationships` FKs
@@ -272,7 +293,12 @@ All three are late-delivery analytics built on `fact_orders` (filtered to
   `.zipCodePrefix` → `dim_geolocation`, `dim_geolocation.regionId` → `dim_regions`);
   `dbt_utils.unique_combination_of_columns` on `dim_regions(city, state)`.
 - Facts: `fact_orders` — `fulfillmentStatus` `accepted_values` (order-status enum),
-  `avgReviewScore` `accepted_range(1..5)`; `fact_order_items` —
+  `avgReviewScore` `accepted_range(1..5)`, plus `accepted_range(min:0)` **at
+  `severity: warn`** on the forward-duration metrics (`processingHours`,
+  `deliveryHours`, `courierHours`, `totalTimeHours`, `estimatedHours`) — negatives
+  flag out-of-order source timestamps without failing the gold job.
+  `deliveryDelayHours` is deliberately NOT range-tested (legitimately negative for
+  early deliveries). `fact_order_items` —
   `unique_combination_of_columns(orderId, orderItemId)`, `relationships` to
   `fact_orders`/`dim_products`/`dim_sellers`, `accepted_range(min:0)` on
   `price`/`freightValue`.
@@ -281,6 +307,9 @@ All three are late-delivery analytics built on `fact_orders` (filtered to
   `accepted_range(0..100)` on `lateRatePct`; `agg_delivery_vs_satisfaction` uses
   `accepted_range(-1..5)` (the `-1` no-review bucket); `agg_delivery_by_seller.sellerId`
   has a `relationships` FK → `dim_sellers`.
+- Singular: `assert_region_agg_reconciles` — fails if
+  `agg_delivery_by_customer_region` drops or double-counts orders vs. the
+  delivered-orders count in `fact_orders`.
 
 ### Status
 
@@ -299,6 +328,10 @@ are now implemented. See §11 for the Workflows that wire bronze → silver → 
 - **Numeric/string casts**: `.cast()` is safe (returns NULL on failure, never throws).
   This is the standard approach for silver.
 - **dbt**: include `tests` (not_null, unique, relationships) on all gold models.
+- **dbt SQL aliasing**: relation aliases (tables, CTEs, refs) are **descriptive
+  and written without the `as` keyword** (`from {{ ref('fact_orders') }} orders`,
+  not `as orders` and not single letters). Column aliases **do** use `as`
+  (`avg(latitude) as latitude`).
 
 ---
 
@@ -366,5 +399,69 @@ order bronze → silver → gold):
 
 > `email_notifications.on_failure` is scaffolded but commented out in all three
 > job files.
+
+---
+
+## 12. CI/CD — GitHub Actions (`.github/workflows/`)
+
+One CI workflow plus a manual deploy. The **ruff** and **dbt parse** checks are
+offline (no credentials); the **sqlfluff** check uses the dbt templater and is
+therefore gated to PRs only (it needs a warehouse connection).
+
+### `ci.yml` — quality checks
+
+Triggers: **push to any branch except `main`** and **PRs targeting `main`**.
+
+- **ruff** (every push + PR, offline) — `ruff check .` + `ruff format --check .`.
+  Config in `pyproject.toml` (`line-length = 120`; `builtins = [spark, dbutils,
+  display, displayHTML, getArgument]` so the Databricks-injected notebook globals
+  don't trip `F821`).
+- **dbt parse** (every push + PR, offline) — `dbt deps` + `dbt parse` in
+  `src/dbt` (validates models + `_*.yml`). Dummy `DBT_HTTP_PATH`/`DBT_TOKEN` env
+  vars just render `profiles.yml`; `parse` never connects.
+- **sqlfluff** (`if: pull_request` only) — `sqlfluff lint src/dbt/models` (dialect
+  `databricks`) using the **dbt templater** (`.sqlfluff`: `templater = dbt`,
+  `project_dir`/`profiles_dir = src/dbt`, `profile = olist`, `target = dev`). The
+  dbt templater compiles the project against the **Databricks warehouse**, so it
+  needs real credentials — hence it runs only on PRs to main and binds the `dev`
+  GitHub Environment (scoping the `DBT_HTTP_PATH`/`DBT_TOKEN` secrets). The job
+  installs `sqlfluff-templater-dbt` + `dbt-databricks`, runs `dbt deps`, then
+  lints from the repo root. Rules `CP02` (identifier case — columns are camelCase)
+  and `RF04` (keywords as identifiers — `name`, `state`) are disabled to match the
+  project conventions (§9). Table aliases implicit, column aliases explicit,
+  keywords/functions lower-case.
+
+> Why the dbt templater over a jinja stub: it resolves `ref()`, project macros,
+> and `dbt_utils.*` for real (no fake stubs), at the cost of needing a warehouse
+> connection. The trade-off chosen here is fidelity over offline-on-every-branch:
+> sqlfluff only runs at PR time, never exposing secrets to arbitrary branch pushes.
+>
+> The dbt SQL was normalized once with `ruff format` / `sqlfluff fix` to establish
+> a clean baseline (only mechanical/style changes — no logic changed). dbt run
+> artifacts are git-ignored: `src/dbt/{dbt_packages,logs,target}/` + `.user.yml`
+> (but `package-lock.yml` is committed).
+
+### `deploy.yml` — manual bundle deploy
+
+`workflow_dispatch` only (the **Run workflow** button), with a `target` choice
+input (`dev` / `prod`). Steps: `databricks bundle validate` → `databricks bundle
+deploy -t <target>`. CLI auth via env (`DATABRICKS_HOST`, `DATABRICKS_CLIENT_ID`,
+`DATABRICKS_CLIENT_SECRET` — OAuth M2M service principal).
+
+**Access control (no required reviewers, by design):**
+
+- The job binds `environment: ${{ inputs.target }}`, so the `DATABRICKS_*` secrets
+  are **scoped per GitHub Environment** (`dev` / `prod`) — the prod
+  service-principal credentials are only readable by the `prod` environment.
+- **Who can deploy:** `workflow_dispatch` is only available to repo collaborators
+  with **write** access — not anyone.
+- **prod is `main`-only:** a guard step hard-fails any `prod` run whose ref isn't
+  `main`; pair it with the `prod` environment's deployment-branch rule.
+
+> **Manual GitHub setup required** (not in code): create the `dev` and `prod`
+> Environments in repo Settings. Add the three `DATABRICKS_*` secrets (OAuth M2M,
+> for `deploy.yml`) to **both**; additionally add `DBT_HTTP_PATH` + `DBT_TOKEN`
+> (warehouse HTTP path + PAT, for the sqlfluff dbt-templater check) to the **dev**
+> Environment. Restrict the `prod` environment's deployment branch to `main`.
 
 ---
